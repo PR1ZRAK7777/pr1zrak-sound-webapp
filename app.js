@@ -12,22 +12,6 @@ const visualizer = makeVisualizer(auraCanvas);
 const getAssetUrl = path => new URL(path, import.meta.url).href;
 const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
 
-// Локальные проверенные MP3 файлы (полные студийные треки > 60с)
-const MP3_LOCAL_PREVIEWS = [
-  getAssetUrl("assets/track_femlove_1000_7.mp3"),
-  getAssetUrl("assets/track_shadowraze_showdown.mp3"),
-  getAssetUrl("assets/track_miyagi_minor.mp3"),
-  getAssetUrl("assets/track_macan_yug.mp3"),
-  getAssetUrl("assets/track_linkinpark_numb.mp3"),
-  getAssetUrl("assets/track_tape_kizaru_99problems.mp3"),
-  getAssetUrl("assets/track_macan_asphalt8.mp3"),
-  getAssetUrl("assets/track_lxstcxntury_odium.mp3"),
-  getAssetUrl("assets/track_dvrst_close_eyes.mp3"),
-  getAssetUrl("assets/track_scriptonite_polozhenie.mp3"),
-  getAssetUrl("assets/track_ogbuda_bandit.mp3"),
-  getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
-];
-
 // Каталог популярных треков: реальное аудио 1-к-1 с точной реальной длительностью
 const SEED_CATALOG = [
   {
@@ -143,23 +127,11 @@ const SEED_CATALOG = [
 // Умный определитель аудио для любого трека (по ID, названию, артисту или тегам)
 function resolveTrackAudio(track) {
   if (track && track.audio_url) return track.audio_url;
-  if (!track) return MP3_LOCAL_PREVIEWS[0];
-  const q = `${track.artist || ""} ${track.title || ""}`.toLowerCase();
-  const match = SEED_CATALOG.find(t => {
-    const tArt = t.artist.toLowerCase();
-    const tTit = t.title.toLowerCase();
-    if (q.includes(tTit) || (q.includes(tArt) && tTit.includes(q)) || (tArt.includes(q) && tTit.includes(q))) {
-      return true;
-    }
-    if (t.aliases && t.aliases.some(a => q.includes(a))) {
-      return true;
-    }
-    return false;
-  }) || SEED_CATALOG.find(t => {
-    const tTit = t.title.toLowerCase();
-    return q.includes(tTit) || tTit.includes(q);
-  });
-  return match ? match.audio_url : MP3_LOCAL_PREVIEWS[0];
+  const normalize = value => String(value || "").trim().toLowerCase();
+  return SEED_CATALOG.find(t =>
+    normalize(t.artist) === normalize(track?.artist) &&
+    normalize(t.title) === normalize(track?.title)
+  )?.audio_url;
 }
 
 /* ────────────────── ЕДИНЫЙ АУДИОКОНТЕКСТ И АНАЛИЗАТОР ────────────────── */
@@ -785,7 +757,10 @@ async function play(i) {
   stopCurrentAudio(false);
   render();
 
-  el("status").textContent = "Студийный звук • 320 kbps";
+  document.body.classList.remove("playing");
+  updatePlayIcon(false);
+  visualizer.setPlaying(false);
+  el("status").textContent = "Загружаю аудио…";
 
   // СИНХРОННАЯ разблокировка аудиоконтекста в контексте клика
   unlockAudioEngine();
@@ -807,6 +782,10 @@ async function play(i) {
   }
 
   if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул!
+  if (!streamSrc) {
+    el("status").textContent = "Аудио этого трека недоступно.";
+    return;
+  }
 
   // 1. Попытка воспроизведения через Web Audio Buffer
   let playedSuccessfully = false;
@@ -839,12 +818,7 @@ async function play(i) {
       if (playPromise !== undefined) {
         await playPromise;
       }
-      if (sessionId !== currentSessionId) {
-        audio.onended = null;
-        audio.pause();
-        audio.removeAttribute("src");
-        return;
-      }
+      if (sessionId !== currentSessionId) return;
       playedSuccessfully = true;
     } catch (err) {
       if (sessionId !== currentSessionId) return;
@@ -853,28 +827,15 @@ async function play(i) {
   }
 
   // Финальная проверка сессии перед переходом в режим воспроизведения
-  if (sessionId !== currentSessionId) {
+  if (sessionId !== currentSessionId) return;
+
+  if (!playedSuccessfully) {
     stopCurrentAudio();
+    el("status").textContent = "Не удалось воспроизвести трек.";
     return;
   }
 
-  // 3. Если оба способа заблокированы политикой браузера — включаем синтезатор
-  if (!playedSuccessfully) {
-    synth.start((currentTime, totalDuration) => {
-      if (sessionId !== currentSessionId) {
-        synth.stop();
-        return;
-      }
-      el("time").textContent = clock(currentTime);
-      el("time-total").textContent = clock(totalDuration);
-      el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
-      if (currentTime >= totalDuration) {
-        synth.stop();
-        handleTrackEnd();
-      }
-    });
-  }
-
+  el("status").textContent = "";
   document.body.classList.add("playing");
   updatePlayIcon(true);
   visualizer.setPlaying(true, getCurrentPlaybackTime);
@@ -882,6 +843,7 @@ async function play(i) {
 
   // Анти-повтор: фиксация недавних треков
   if (selected && selected.id) {
+    recentPlayed.delete(selected.id);
     recentPlayed.add(selected.id);
     if (recentPlayed.size > 25) {
       const oldest = recentPlayed.values().next().value;
@@ -919,13 +881,17 @@ function handleTrackEnd() {
     }
     play(0).catch(showError);
   } else if (list === "wave") {
+    const sessionId = currentSessionId;
     refill().then(() => {
+      if (sessionId !== currentSessionId) return;
       if (index + 1 < tracks.length) {
         play(index + 1).catch(showError);
       } else {
         pausePlayback();
       }
-    }).catch(() => pausePlayback());
+    }).catch(() => {
+      if (sessionId === currentSessionId) pausePlayback();
+    });
   } else {
     // Окончание списка воспроизведения
     pausePlayback();
@@ -935,6 +901,7 @@ function handleTrackEnd() {
 }
 
 function pausePlayback() {
+  ++currentSessionId;
   bufferPauseOffset = getCurrentPlaybackTime();
   // Останавливаем воспроизведение, но сохраняем буфер для resume
   stopCurrentAudio(true);
@@ -960,16 +927,14 @@ function resumePlayback() {
     };
     audio.muted = false;
     audio.play().then(() => {
-      if (sessionId !== currentSessionId) {
-        audio.onended = null;
-        audio.pause();
-        return;
-      }
+      if (sessionId !== currentSessionId) return;
       document.body.classList.add("playing");
       updatePlayIcon(true);
       visualizer.setPlaying(true, getCurrentPlaybackTime);
       startProgressTicker(sessionId);
-    }).catch(() => play(index));
+    }).catch(() => {
+      if (sessionId === currentSessionId) play(index).catch(showError);
+    });
   } else {
     play(index).catch(showError);
   }
@@ -1081,10 +1046,8 @@ async function select(name) {
   }
 
   // Фоновая предзагрузка первых MP3 в буфер Web Audio
-  if (tracks.length > 0) {
-    const firstUrl = tracks[0].audio_url || MP3_LOCAL_PREVIEWS[0];
-    loadAudioBuffer(firstUrl).catch(() => {});
-  }
+  const firstUrl = resolveTrackAudio(tracks[0]);
+  if (firstUrl) loadAudioBuffer(firstUrl).catch(() => {});
 }
 
 for (const b of document.querySelectorAll("[data-list]")) {
@@ -1098,7 +1061,9 @@ el("next").onclick = () => {
   } else if (repeatMode === "all") {
     play(0).catch(showError);
   } else if (list === "wave") {
+    const sessionId = currentSessionId;
     refill().then(() => {
+      if (sessionId !== currentSessionId) return;
       if (index + 1 < tracks.length) {
         play(index + 1).catch(showError);
       }
@@ -1239,20 +1204,6 @@ async function doSearch() {
       return false;
     });
 
-    if (!resTracks.length) {
-      const match = SEED_CATALOG.find(t =>
-        t.aliases && t.aliases.some(a => qLower.includes(a) || a.includes(qLower))
-      ) || SEED_CATALOG[0];
-
-      resTracks = [{
-        id: match.id,
-        artist: match.artist,
-        title: match.title,
-        duration_sec: match.duration_sec,
-        cover_url: match.cover_url,
-        audio_url: match.audio_url
-      }];
-    }
   }
 
   if (r !== revision || sessionId !== currentSessionId) return;
