@@ -137,22 +137,22 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       const baseRadius = 68;
       const currentRadius = baseRadius + smoothedBass * 28;
       const ribbonWidth = 22 + smoothedBass * 12;
-      const neon = aCtx.createLinearGradient(cx, cy - currentRadius, cx, cy + currentRadius);
-      neon.addColorStop(0, "#00f2fe");
-      neon.addColorStop(.38, "#38bdf8");
-      neon.addColorStop(.68, "#a855f7");
-      neon.addColorStop(1, "#ec4899");
 
-      // А. Фоновое мягкое неоновое свечение (Smoky White Bloom)
+      // А. Фоновое мягкое неоновое белое свечение (Smoky White Bloom)
       // Внутри радиуса пустота, свечение снаружи
+      const innerVoidR = Math.max(12, currentRadius * 0.45);
+      const outerBloomR = Math.min(160, currentRadius * 1.48);
+      const glowGrad = aCtx.createRadialGradient(cx, cy, innerVoidR, cx, cy, outerBloomR);
+      glowGrad.addColorStop(0, "rgba(0, 0, 0, 0)");
+      glowGrad.addColorStop(0.35, `rgba(255, 255, 255, ${0.04 + smoothedBass * 0.09})`);
+      glowGrad.addColorStop(0.68, `rgba(230, 238, 255, ${0.07 + smoothedBass * 0.17})`);
+      glowGrad.addColorStop(0.92, `rgba(180, 195, 220, ${0.02 + smoothedBass * 0.06})`);
+      glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
       aCtx.save();
-      aCtx.globalAlpha = .18 + smoothedBass * .25;
-      aCtx.filter = "blur(14px)";
-      aCtx.strokeStyle = neon;
-      aCtx.lineWidth = ribbonWidth;
+      aCtx.fillStyle = glowGrad;
       aCtx.beginPath();
-      aCtx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
-      aCtx.stroke();
+      aCtx.arc(cx, cy, outerBloomR, 0, Math.PI * 2);
+      aCtx.fill();
       aCtx.restore();
 
       // Б. Вспышки лучей (Radial Bloom Needles) при басовых ударах
@@ -160,13 +160,12 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         const rayCount = 32;
         aCtx.save();
         const rayAlpha = Math.min(0.85, (smoothedBass - 0.20) * 1.15);
-        aCtx.strokeStyle = neon;
-        aCtx.globalAlpha = rayAlpha;
+        aCtx.strokeStyle = `rgba(255, 255, 255, ${rayAlpha})`;
         aCtx.lineWidth = 1.1;
         aCtx.shadowBlur = 8;
+        aCtx.shadowColor = "#ffffff";
         for (let r = 0; r < rayCount; r++) {
           const rayAngle = (r / rayCount) * Math.PI * 2 + beatPhase * 0.06;
-          aCtx.shadowColor = Math.sin(rayAngle) < 0 ? "#00f2fe" : "#ec4899";
           const rInner = currentRadius + ribbonWidth * 0.38;
           const rOuter = Math.min(156, currentRadius + ribbonWidth * 0.48 + 6 + smoothedBass * 24);
           aCtx.beginPath();
@@ -188,8 +187,9 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         let layerAlpha = (1.0 - Math.abs(v) * 1.1) * (0.45 + smoothedBass * 0.55);
         layerAlpha = Math.max(0.12, Math.min(1.0, layerAlpha));
 
-        aCtx.fillStyle = neon;
-        aCtx.globalAlpha = layerAlpha * (isCore ? 1 : .8);
+        const baseFill = isCore ? `rgba(255, 255, 255, ${layerAlpha})` : `rgba(225, 230, 242, ${layerAlpha * 0.8})`;
+        aCtx.fillStyle = baseFill;
+        aCtx.globalAlpha = 1.0;
 
         for (let p = 0; p < POINTS_PER_BAND; p++) {
           const u = (p / POINTS_PER_BAND) * Math.PI * 2;
@@ -248,8 +248,8 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         const py = cy + Math.sin(pt.angle) * pt.dist;
 
         const pAlpha = Math.min(1.0, pt.alpha * (0.65 + smoothedBass * 0.65));
-        aCtx.globalAlpha = pAlpha;
-        aCtx.fillStyle = neon;
+        aCtx.globalAlpha = 1.0;
+        aCtx.fillStyle = `rgba(255, 255, 255, ${pAlpha})`;
         aCtx.beginPath();
         aCtx.arc(px, py, pt.size * (1 + smoothedBass * 0.35), 0, Math.PI * 2);
         aCtx.fill();
@@ -259,8 +259,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
           const tailLen = 3 + smoothedBass * 8;
           const tx = px + Math.cos(pt.angle) * tailLen;
           const ty = py + Math.sin(pt.angle) * tailLen;
-          aCtx.globalAlpha = pAlpha * .55;
-          aCtx.strokeStyle = neon;
+          aCtx.strokeStyle = `rgba(255, 255, 255, ${pAlpha * 0.55})`;
           aCtx.lineWidth = 0.8;
           aCtx.beginPath();
           aCtx.moveTo(px, py);
