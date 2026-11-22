@@ -92,20 +92,20 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
       treble = 0.05;
     }
 
-    // Плавное сглаживание баса с мгновенной реакцией на атаку
+    // Плавное сглаживание баса: аккуратная сбалансированная реакция без резких скачков
     if (bass > smoothedBass) {
-      smoothedBass += (bass - smoothedBass) * 0.65; // мгновенный удар
+      smoothedBass += (bass - smoothedBass) * 0.40; // мягкий подъем
     } else {
-      smoothedBass += (bass - smoothedBass) * 0.18; // плавный возврат
+      smoothedBass += (bass - smoothedBass) * 0.12; // плавное шелковистое затухание
     }
 
-    beatPhase += dt * (2.0 + smoothedBass * 4.0);
+    beatPhase += dt * (2.0 + smoothedBass * 2.8);
 
     // 2. Пульсация центрального диска с обложкой
     if (sleeve) {
-      const sleeveScale = 1 + smoothedBass * 0.10;
+      const sleeveScale = 1 + smoothedBass * 0.05;
       sleeve.style.transform = `scale(${sleeveScale})`;
-      sleeve.style.boxShadow = `0 0 ${20 + smoothedBass * 45}px rgba(255, 255, 255, ${0.35 + smoothedBass * 0.45}), inset 0 0 25px rgba(0, 0, 0, 0.9)`;
+      sleeve.style.boxShadow = `0 0 ${16 + smoothedBass * 24}px rgba(255, 255, 255, ${0.30 + smoothedBass * 0.30}), inset 0 0 25px rgba(0, 0, 0, 0.9)`;
     }
 
     // 3. Отрисовка круговой флюидной ауры (Aura Canvas)
@@ -116,9 +116,9 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
       const cy = h / 2;
       aCtx.clearRect(0, 0, w, h);
 
-      // Радиус ауры (динамически УВЕЛИЧИВАЕТСЯ под бит!)
+      // Радиус ауры (аккуратная сбалансированная пульсация ровно до +20px)
       const baseRadius = 82;
-      const currentRadius = baseRadius + smoothedBass * 32;
+      const currentRadius = baseRadius + smoothedBass * 20;
 
       // А. Фоновое мягкое неоновое свечение (Bloom)
       const glowGrad = aCtx.createRadialGradient(cx, cy, currentRadius * 0.6, cx, cy, currentRadius * 1.55);
@@ -131,18 +131,18 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
       aCtx.arc(cx, cy, currentRadius * 1.55, 0, Math.PI * 2);
       aCtx.fill();
 
-      // Б. Вспышки лучей (Radial Bloom Rays) при сильном басе
-      if (smoothedBass > 0.35) {
-        const rayCount = 18;
+      // Б. Вспышки лучей (Radial Bloom Rays) при акцентированном басе
+      if (smoothedBass > 0.45) {
+        const rayCount = 14;
         aCtx.save();
-        aCtx.strokeStyle = `rgba(255, 255, 255, ${(smoothedBass - 0.35) * 0.4})`;
-        aCtx.lineWidth = 1.2;
-        aCtx.shadowBlur = 10;
+        aCtx.strokeStyle = `rgba(255, 255, 255, ${(smoothedBass - 0.45) * 0.32})`;
+        aCtx.lineWidth = 1.0;
+        aCtx.shadowBlur = 8;
         aCtx.shadowColor = "#ffffff";
         for (let r = 0; r < rayCount; r++) {
-          const rayAngle = (r / rayCount) * Math.PI * 2 + beatPhase * 0.1;
-          const rInner = currentRadius + 8;
-          const rOuter = currentRadius + 22 + smoothedBass * 35;
+          const rayAngle = (r / rayCount) * Math.PI * 2 + beatPhase * 0.08;
+          const rInner = currentRadius + 6;
+          const rOuter = currentRadius + 14 + smoothedBass * 16;
           aCtx.beginPath();
           aCtx.moveTo(cx + Math.cos(rayAngle) * rInner, cy + Math.sin(rayAngle) * rInner);
           aCtx.lineTo(cx + Math.cos(rayAngle) * rOuter, cy + Math.sin(rayAngle) * rOuter);
@@ -156,14 +156,14 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
       const wavePoints = [];
       for (let i = 0; i < SEGMENTS; i++) {
         const ang = (i / SEGMENTS) * Math.PI * 2;
-        const w1 = Math.sin(ang * 6 + beatPhase * 3.5) * (4 + smoothedBass * 14);
-        const w2 = Math.cos(ang * 11 - beatPhase * 2.5) * (2 + smoothedBass * 8);
-        const w3 = Math.sin(ang * 3 + beatPhase * 1.2) * (5 + smoothedBass * 12);
+        const w1 = Math.sin(ang * 6 + beatPhase * 2.5) * (3 + smoothedBass * 7);
+        const w2 = Math.cos(ang * 10 - beatPhase * 1.8) * (2 + smoothedBass * 5);
+        const w3 = Math.sin(ang * 3 + beatPhase * 1.0) * (3 + smoothedBass * 6);
         
         let freqAdd = 0;
         if (bins) {
           const bIdx = Math.floor((i / SEGMENTS) * 32);
-          freqAdd = (bins[bIdx] / 255) * (10 + smoothedBass * 20);
+          freqAdd = (bins[bIdx] / 255) * (6 + smoothedBass * 12);
         }
 
         const r = currentRadius + w1 + w2 + w3 + freqAdd;
@@ -181,9 +181,9 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
         aCtx.lineTo(wavePoints[i].x, wavePoints[i].y);
       }
       aCtx.closePath();
-      aCtx.strokeStyle = `rgba(255, 255, 255, ${0.18 + smoothedBass * 0.25})`;
-      aCtx.lineWidth = 14;
-      aCtx.shadowBlur = 24;
+      aCtx.strokeStyle = `rgba(255, 255, 255, ${0.16 + smoothedBass * 0.20})`;
+      aCtx.lineWidth = 12;
+      aCtx.shadowBlur = 20;
       aCtx.shadowColor = "#ffffff";
       aCtx.stroke();
       aCtx.restore();
@@ -196,9 +196,9 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
         aCtx.lineTo(wavePoints[i].x, wavePoints[i].y);
       }
       aCtx.closePath();
-      aCtx.strokeStyle = `rgba(240, 243, 250, ${0.65 + smoothedBass * 0.35})`;
-      aCtx.lineWidth = 3.5;
-      aCtx.shadowBlur = 12;
+      aCtx.strokeStyle = `rgba(240, 243, 250, ${0.60 + smoothedBass * 0.30})`;
+      aCtx.lineWidth = 3.2;
+      aCtx.shadowBlur = 10;
       aCtx.shadowColor = "#ffffff";
       aCtx.stroke();
       aCtx.restore();
@@ -212,31 +212,31 @@ export function makeVisualizer(audio, spectrumCanvas, sleeve, auraCanvas) {
       }
       aCtx.closePath();
       aCtx.strokeStyle = "#ffffff";
-      aCtx.lineWidth = 1.5;
-      aCtx.shadowBlur = 6;
+      aCtx.lineWidth = 1.4;
+      aCtx.shadowBlur = 5;
       aCtx.shadowColor = "#ffffff";
       aCtx.stroke();
       aCtx.restore();
 
       // Г. Отрисовка флюидных монохромных частиц (Blooming Sparks)
       aCtx.save();
-      aCtx.shadowBlur = 8;
+      aCtx.shadowBlur = 6;
       aCtx.shadowColor = "#ffffff";
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        p.angle += p.angularVel + (smoothedBass * 0.01);
+        p.angle += p.angularVel + (smoothedBass * 0.008);
 
-        // Импульс от баса: частицы взрываются и цветут наружу
-        if (smoothedBass > 0.2) {
-          p.radialVel += smoothedBass * 18 * dt;
+        // Импульс от баса: умеренный плавный вылет
+        if (smoothedBass > 0.25) {
+          p.radialVel += smoothedBass * 9 * dt;
         }
 
         p.dist += p.radialVel;
-        p.radialVel *= 0.90; // затухание скорости
+        p.radialVel *= 0.92; // мягкое затухание скорости
 
         // Мягкое притяжение к текущему радиусу волны
         const targetD = currentRadius + (p.baseDist - 82);
-        p.dist += (targetD - p.dist) * 0.08;
+        p.dist += (targetD - p.dist) * 0.07;
 
         const px = cx + Math.cos(p.angle) * p.dist;
         const py = cy + Math.sin(p.angle) * p.dist;
