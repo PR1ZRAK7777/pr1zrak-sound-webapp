@@ -42,11 +42,44 @@ export function appendWaveBatch(queue, index, batch, recentPlayed = new Set()) {
   queue.push(...additions);
 }
 
-export function shuffleUpcoming(queue, index) {
+export function discoveryContext(catalog, history = [], recent = [], liked = []) {
+  const ids = new Set([...history, ...recent, ...liked]);
+  const artists = new Set(catalog.filter(t => ids.has(t.id))
+    .map(t => (t.artist || "").trim().toLowerCase()).filter(Boolean));
+  return {active: ids.size >= 30, artists, ids};
+}
+
+export function shuffleUpcoming(queue, index, familiarIds = new Set()) {
   if (!Array.isArray(queue) || queue.length <= 1) return;
-  const startIndex = Math.max(-1, Math.min(index, queue.length - 2));
-  for (let i = queue.length - 1; i > startIndex + 1; i--) {
-    const j = startIndex + 1 + Math.floor(Math.random() * (i - startIndex));
-    [queue[i], queue[j]] = [queue[j], queue[i]];
+  const startIndex = Math.max(-1, Math.min(index, queue.length - 1));
+  const artist = t => (t?.artist || "").trim().toLowerCase();
+  const familiar = t => familiarIds.has(t.id) || t.source === "library";
+  const groups = new Map();
+  for (const track of queue.slice(startIndex + 1)) {
+    const key = artist(track);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(track);
   }
+  let previous = artist(queue[startIndex]);
+  let wantFamiliar = !familiar(queue[startIndex] || {});
+  const ordered = [];
+  while (groups.size) {
+    const candidates = [...groups].filter(([key]) => key !== previous);
+    const choices = candidates.length ? candidates : [...groups];
+    // Prefer the largest artist bucket to avoid stranding repeated artists at the end.
+    choices.sort((a, b) => b[1].length - a[1].length);
+    const maximum = choices[0][1].length;
+    const balanced = choices.filter(([, items]) => items.length === maximum);
+    const preferred = balanced.filter(([, items]) => items.some(t => familiar(t) === wantFamiliar));
+    const options = preferred.length ? preferred : balanced;
+    const [key, items] = options[Math.floor(Math.random() * options.length)];
+    let position = items.findIndex(t => familiar(t) === wantFamiliar);
+    if (position < 0) position = Math.floor(Math.random() * items.length);
+    const track = items.splice(position, 1)[0];
+    ordered.push(track);
+    previous = key;
+    wantFamiliar = !familiar(track);
+    if (!items.length) groups.delete(key);
+  }
+  queue.splice(startIndex + 1, queue.length - startIndex - 1, ...ordered);
 }

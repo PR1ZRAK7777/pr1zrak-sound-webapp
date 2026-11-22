@@ -1,4 +1,4 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=9";
+import {appendWaveBatch, discoveryContext, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=18";
 import {makeVisualizer} from "./visualizer.js?v=14";
 
 const el = id => document.getElementById(id);
@@ -494,6 +494,23 @@ let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, obje
 let repeatMode = "off"; // "off" | "all" | "one"
 let isShuffle = false;
 const recentPlayed = new Set();
+const knownWaveTracks = new Map([...SEED_CATALOG, ...SEARCH_RELEASES].map(t => [t.id, t]));
+function waveContext() {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem("pr1zrak_history") || "[]"); } catch (_) {}
+  if (!Array.isArray(history)) history = [];
+  for (const t of tracks) knownWaveTracks.set(t.id, t);
+  const context = discoveryContext([...knownWaveTracks.values()], history, recentPlayed, liked);
+  try {
+    const saved = JSON.parse(localStorage.getItem("pr1zrak_listened_artists") || "[]");
+    if (Array.isArray(saved)) for (const artist of saved) context.artists.add(artist);
+    if (context.ids.size) localStorage.setItem("pr1zrak_listened_artists", JSON.stringify([...context.artists]));
+  } catch (_) {}
+  return context;
+}
+function shuffleUpcoming(queue, position) {
+  shuffleQueue(queue, position, waveContext().ids);
+}
 
 const current = () => tracks[index];
 const clock = s => {
@@ -667,7 +684,10 @@ async function refill() {
   try {
     const res = await api(`wave/${uid}?limit=5`);
     if (res) {
-      const extra = await res.json();
+      let extra = await res.json();
+      for (const t of extra) knownWaveTracks.set(t.id, t);
+      const context = waveContext();
+      if (context.active) extra = extra.filter(t => !context.artists.has((t.artist || "").trim().toLowerCase()));
       if (r === revision) {
         appendWaveBatch(tracks, index, extra, recentPlayed);
         if (isShuffle) shuffleUpcoming(tracks, index);
@@ -676,7 +696,12 @@ async function refill() {
     } else {
       const currentId = current()?.id;
       const upcomingIds = new Set(tracks.slice(index + 1).map(t => t.id));
-      const pool = SEED_CATALOG.filter(t => t.id !== currentId && !upcomingIds.has(t.id));
+      const context = waveContext();
+      const pool = SEED_CATALOG.filter(t => t.id !== currentId && !upcomingIds.has(t.id)
+        && (!context.active || !context.artists.has((t.artist || "").trim().toLowerCase())));
+      if (context.active && !pool.length) {
+        el("status").textContent = "В каталоге закончились новые артисты.";
+      }
 
       const unplayed = pool.filter(t => !recentPlayed.has(t.id));
       const pickPool = unplayed.length >= 3 ? unplayed : pool;
@@ -834,7 +859,7 @@ async function play(i) {
   if (selected && selected.id) {
     recentPlayed.delete(selected.id);
     recentPlayed.add(selected.id);
-    if (recentPlayed.size > 25) {
+    if (recentPlayed.size > 1000) {
       const oldest = recentPlayed.values().next().value;
       recentPlayed.delete(oldest);
     }
@@ -850,6 +875,7 @@ async function play(i) {
       localStorage.setItem("pr1zrak_history", JSON.stringify(history));
     }
   } catch (_) {}
+  waveContext();
 
   if (!isGitHubPages) {
     api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
@@ -1022,6 +1048,11 @@ async function select(name) {
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
+  if (list === "wave") {
+    const context = waveContext();
+    if (context.active) tracks = tracks.filter(t =>
+      !context.artists.has((t.artist || "").trim().toLowerCase()));
+  }
   if (isShuffle && tracks.length > 1) {
     shuffleUpcoming(tracks, -1);
     index = 0;
