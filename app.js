@@ -11,6 +11,14 @@ const visualizer = makeVisualizer(auraCanvas);
 
 const getAssetUrl = path => new URL(path, import.meta.url).href;
 const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
+const SEARCH_RELEASES = [{
+  id: "type-0-park-music",
+  artist: "type_0",
+  title: "park music =)))))",
+  duration_sec: 135,
+  aliases: ["onda andar", "онда андар", "онда андер", "типа 0", "тип 0"],
+  release_url: "https://sber-zvuk.com/track/190302374",
+}];
 
 // Каталог популярных треков: реальное аудио 1-к-1 с точной реальной длительностью
 const SEED_CATALOG = [
@@ -594,7 +602,7 @@ function updateShuffleIcon(active) {
 
 function render() {
   const t = current();
-  el("like").disabled = !t;
+  el("like").disabled = !t || Boolean(t.release_url);
   el("title").textContent = t ? t.title : (list === "favorites" ? "Мои треки" : "ПРИЗРАК");
   el("artist").textContent = t ? t.artist : (list === "favorites" ? "Любимая музыка" : "PR1ZRAK Sound");
 
@@ -626,16 +634,16 @@ function render() {
     li.className = "track-row" + (i === index ? " active" : "");
     li.setAttribute("role", "button");
     li.setAttribute("tabindex", "0");
-    li.title = `Воспроизвести ${track.artist} — ${track.title}`;
+    li.title = `${track.release_url ? "Открыть в Звуке" : "Воспроизвести"} ${track.artist} — ${track.title}`;
 
     const infoSpan = document.createElement("span");
     infoSpan.className = "track-info-btn";
     infoSpan.textContent = (i === index ? "• " : "") + `${track.artist} — ${track.title}`;
-    infoSpan.setAttribute("aria-label", `Воспроизвести ${track.artist} — ${track.title}`);
+    infoSpan.setAttribute("aria-label", li.title);
 
     const trackDur = document.createElement("span");
     trackDur.className = "track-duration-text";
-    trackDur.textContent = clock(track.duration_sec);
+    trackDur.textContent = track.release_url ? "Слушать в Звуке ↗" : clock(track.duration_sec);
 
     li.append(infoSpan, trackDur);
 
@@ -725,6 +733,13 @@ async function play(i) {
   if (!tracks || tracks.length === 0) return;
   if (!tracks[i]) {
     i = 0;
+  }
+  if (tracks[i].release_url) {
+    pausePlayback();
+    const url = tracks[i].release_url;
+    if (tg?.openLink) tg.openLink(url);
+    else window.open(url, "_blank", "noopener,noreferrer");
+    return;
   }
   const sessionId = ++currentSessionId;
   index = i;
@@ -1176,13 +1191,10 @@ async function doSearch() {
 
   if (!resTracks || !resTracks.length) {
     const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
-    const generic = new Set(["music", "музыка", "song", "песня"]);
-    const terms = words.filter(word => !generic.has(word));
-    const required = terms.length ? terms : words;
-    resTracks = SEED_CATALOG.filter(t => {
+    resTracks = [...SEARCH_RELEASES, ...SEED_CATALOG].filter(t => {
       const haystack = [t.artist, t.title, ...(t.aliases || [])].join(" ").toLowerCase();
       const catalogWords = haystack.match(/[\p{L}\p{N}]+/gu) || [];
-      return required.length > 0 && required.every(term =>
+      return words.length > 0 && words.every(term =>
         catalogWords.some(word => word === term || (term.length >= 3 && word.startsWith(term)))
       );
     });
