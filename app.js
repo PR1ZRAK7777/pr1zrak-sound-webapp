@@ -1,5 +1,5 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=6";
-import {makeVisualizer} from "./visualizer.js?v=6";
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=7";
+import {makeVisualizer} from "./visualizer.js?v=7";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -373,7 +373,16 @@ async function loadAudioBuffer(url) {
       const arrayBuf = await res.arrayBuffer();
       const ctx = ensureAudioContext();
       if (!ctx) return null;
-      const decoded = await ctx.decodeAudioData(arrayBuf);
+      const decoded = await new Promise((resolve, reject) => {
+        try {
+          const r = ctx.decodeAudioData(arrayBuf, resolve, reject);
+          if (r && typeof r.then === "function") {
+            r.then(resolve, reject);
+          }
+        } catch (e) {
+          reject(e);
+        }
+      });
       audioBufferCache.set(url, decoded);
       return decoded;
     } catch (_) {
@@ -405,11 +414,14 @@ function stopCurrentAudio(keepPauseState = false) {
     currentDecodedBuffer = null;
   }
 
-  // 2. Глушим HTML5 audio
+  // 2. Глушим HTML5 audio (при паузе сохраняем src для быстрого resumePlayback)
   try {
+    audio.onended = null;
     audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
+    if (!keepPauseState) {
+      audio.removeAttribute("src");
+      audio.load();
+    }
   } catch (_) {}
 
   // 3. Глушим синтезатор
@@ -435,6 +447,7 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
   activeBufferSources.clear();
 
   try {
+    audio.onended = null;
     audio.pause();
     audio.removeAttribute("src");
   } catch (_) {}
@@ -454,11 +467,14 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
     return false;
   }
 
+  const maxOffset = Math.max(0, (buffer.duration || 0) - 0.05);
+  const safeOffset = Math.max(0, Math.min(offset, maxOffset));
+
   currentBufferSource = source;
   currentDecodedBuffer = buffer;
   activeBufferSources.add(source);
-  bufferPlaybackStartTime = ctx.currentTime - offset;
-  bufferPauseOffset = offset;
+  bufferPlaybackStartTime = ctx.currentTime - safeOffset;
+  bufferPauseOffset = safeOffset;
   isBufferPlaying = true;
 
   source.onended = () => {
@@ -475,7 +491,7 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
   };
 
   try {
-    source.start(0, offset);
+    source.start(0, safeOffset);
     return true;
   } catch (_) {
     activeBufferSources.delete(source);
@@ -652,14 +668,13 @@ async function refill() {
   }
 }
 
-// Регулярный опрос таймера воспроизведения для обновления ползунка и ауры
+// Регулярный опрос таймера воспроизведения для плавного обновления ползунка и таймкодов
 let progressTicker = null;
 function startProgressTicker(sessionId) {
   if (progressTicker) {
     clearInterval(progressTicker);
     progressTicker = null;
   }
-  let sessionEndedHandled = false;
   progressTicker = setInterval(() => {
     if (sessionId !== currentSessionId) {
       clearInterval(progressTicker);
@@ -672,10 +687,6 @@ function startProgressTicker(sessionId) {
       el("time").textContent = clock(cur);
       el("time-total").textContent = clock(dur);
       el("seek").value = Math.min(100, (100 * cur) / dur);
-      if (cur >= dur - 0.25 && !sessionEndedHandled) {
-        sessionEndedHandled = true;
-        play(index + 1).catch(showError);
-      }
     }
   }, 250);
 }
@@ -726,40 +737,45 @@ async function play(i) {
 
   // 1. Попытка воспроизведения через Web Audio Buffer
   let playedSuccessfully = false;
-  const cachedBuffer = audioBufferCache.get(streamSrc);
+  let buf = audioBufferCache.get(streamSrc);
 
-  if (cachedBuffer) {
-    if (sessionId !== currentSessionId) return;
-    playedSuccessfully = playBufferSource(cachedBuffer, 0, sessionId);
-  } else {
+  if (!buf) {
     try {
-      const buf = await loadAudioBuffer(streamSrc);
-      if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул во время загрузки!
-      if (buf) {
-        playedSuccessfully = playBufferSource(buf, 0, sessionId);
-      }
+      buf = await loadAudioBuffer(streamSrc);
     } catch (_) {}
+  }
 
-    // Фолбэк на HTML5 audio ТОЛЬКО если буфер не сработал и сессия всё ещё активна
-    if (!playedSuccessfully && sessionId === currentSessionId) {
-      try {
-        audio.src = streamSrc;
-        audio.volume = currentVolume;
-        audio.muted = false;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          await playPromise;
+  if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул во время загрузки!
+
+  if (buf) {
+    playedSuccessfully = playBufferSource(buf, 0, sessionId);
+  }
+
+  // 2. Фолбэк на HTML5 audio ТОЛЬКО если буфер не сработал и сессия всё ещё активна
+  if (!playedSuccessfully && sessionId === currentSessionId) {
+    try {
+      audio.onended = () => {
+        if (sessionId === currentSessionId) {
+          play(index + 1).catch(showError);
         }
-        if (sessionId !== currentSessionId) {
-          audio.pause();
-          audio.removeAttribute("src");
-          return;
-        }
-        playedSuccessfully = true;
-      } catch (err) {
-        if (sessionId !== currentSessionId) return;
-        playedSuccessfully = false;
+      };
+      audio.src = streamSrc;
+      audio.volume = currentVolume;
+      audio.muted = false;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
       }
+      if (sessionId !== currentSessionId) {
+        audio.onended = null;
+        audio.pause();
+        audio.removeAttribute("src");
+        return;
+      }
+      playedSuccessfully = true;
+    } catch (err) {
+      if (sessionId !== currentSessionId) return;
+      playedSuccessfully = false;
     }
   }
 
@@ -769,7 +785,7 @@ async function play(i) {
     return;
   }
 
-  // 2. Если оба способа заблокированы политикой браузера — включаем синтезатор
+  // 3. Если оба способа заблокированы политикой браузера — включаем синтезатор
   if (!playedSuccessfully) {
     synth.start((currentTime, totalDuration) => {
       if (sessionId !== currentSessionId) {
@@ -779,6 +795,9 @@ async function play(i) {
       el("time").textContent = clock(currentTime);
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
+      if (currentTime >= totalDuration) {
+        play(index + 1).catch(showError);
+      }
     });
   }
 
@@ -816,16 +835,22 @@ function pausePlayback() {
 function resumePlayback() {
   unlockAudioEngine();
   const sessionId = ++currentSessionId;
-  if (currentDecodedBuffer && bufferPauseOffset > 0) {
+  if (currentDecodedBuffer && bufferPauseOffset >= 0) {
     playBufferSource(currentDecodedBuffer, bufferPauseOffset, sessionId);
     document.body.classList.add("playing");
     updatePlayIcon(true);
     visualizer.setPlaying(true, getCurrentPlaybackTime);
     startProgressTicker(sessionId);
   } else if (audio.getAttribute("src")) {
+    audio.onended = () => {
+      if (sessionId === currentSessionId) {
+        play(index + 1).catch(showError);
+      }
+    };
     audio.muted = false;
     audio.play().then(() => {
       if (sessionId !== currentSessionId) {
+        audio.onended = null;
         audio.pause();
         return;
       }
