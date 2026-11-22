@@ -3,10 +3,11 @@
  * @param {Array} queue - Current track queue
  * @param {number} index - Current playing index
  * @param {Array} batch - Candidate tracks to append
- * @param {Set|Array} [recentPlayed] - Set of track IDs recently played
+ * @param {Set|Array} [recentPlayed] - Set or Array of track IDs recently played
  */
 export function appendWaveBatch(queue, index, batch, recentPlayed = new Set()) {
-  const recentSet = recentPlayed instanceof Set ? recentPlayed : new Set(recentPlayed || []);
+  const recentList = recentPlayed instanceof Set ? Array.from(recentPlayed) : Array.from(recentPlayed || []);
+  const recentSet = new Set(recentList);
   const upcomingIds = new Set(queue.slice(index + 1).map(track => track.id));
   const currentId = queue[index]?.id;
 
@@ -26,6 +27,9 @@ export function appendWaveBatch(queue, index, batch, recentPlayed = new Set()) {
     }
   }
 
+  // Sort recent additions: tracks played longest ago (lower index in recentList) come first!
+  recentAdditions.sort((a, b) => recentList.indexOf(a.id) - recentList.indexOf(b.id));
+
   // Prioritize completely fresh tracks over recently played ones
   const additions = [...freshAdditions, ...recentAdditions];
 
@@ -39,8 +43,10 @@ export function appendWaveBatch(queue, index, batch, recentPlayed = new Set()) {
 }
 
 export function shuffleUpcoming(queue, index) {
-  for (let i = queue.length - 1; i > index + 1; i--) {
-    const j = index + 1 + Math.floor(Math.random() * (i - index));
+  if (!Array.isArray(queue) || queue.length <= 1) return;
+  const startIndex = Math.max(-1, Math.min(index, queue.length - 2));
+  for (let i = queue.length - 1; i > startIndex + 1; i--) {
+    const j = startIndex + 1 + Math.floor(Math.random() * (i - startIndex));
     [queue[i], queue[j]] = [queue[j], queue[i]];
   }
 }

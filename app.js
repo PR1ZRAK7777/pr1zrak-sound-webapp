@@ -1,5 +1,5 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=8";
-import {makeVisualizer} from "./visualizer.js?v=8";
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=9";
+import {makeVisualizer} from "./visualizer.js?v=9";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -331,6 +331,12 @@ class ProceduralSynth {
       this.step++;
       this.currentTime += stepDuration;
 
+      if (this.currentTime >= this.duration) {
+        this.stop();
+        if (onTick) onTick(this.duration, this.duration);
+        return;
+      }
+
       if (onTick) onTick(this.currentTime, this.duration);
       this.timer = setTimeout(schedule, stepDuration * 1000);
     };
@@ -587,7 +593,7 @@ function updateLikeIcon(isLiked) {
   const icon = el("like-icon");
   if (!icon) return;
   if (isLiked) {
-    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
   } else {
     icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
   }
@@ -661,10 +667,10 @@ function render() {
     li.setAttribute("tabindex", "0");
     li.title = `Воспроизвести ${track.artist} — ${track.title}`;
 
-    const btnPlay = document.createElement("button");
-    btnPlay.className = "track-info-btn";
-    btnPlay.textContent = (i === index ? "• " : "") + `${track.artist} — ${track.title}`;
-    btnPlay.setAttribute("aria-label", `Воспроизвести ${track.artist} — ${track.title}`);
+    const infoSpan = document.createElement("span");
+    infoSpan.className = "track-info-btn";
+    infoSpan.textContent = (i === index ? "• " : "") + `${track.artist} — ${track.title}`;
+    infoSpan.setAttribute("aria-label", `Воспроизвести ${track.artist} — ${track.title}`);
 
     const trackDur = document.createElement("span");
     trackDur.className = "track-duration-text";
@@ -679,7 +685,7 @@ function render() {
       downloadInTelegram(track);
     };
 
-    li.append(btnPlay, trackDur, btnDl);
+    li.append(infoSpan, trackDur, btnDl);
 
     // Клик по любому месту строки трека мгновенно запускает воспроизведение
     li.onclick = (e) => {
@@ -863,6 +869,7 @@ async function play(i) {
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
       if (currentTime >= totalDuration) {
+        synth.stop();
         handleTrackEnd();
       }
     });
@@ -907,6 +914,9 @@ function handleTrackEnd() {
     play(index + 1).catch(showError);
   } else if (repeatMode === "all") {
     // Повтор всего списка по кругу
+    if (isShuffle && tracks.length > 1) {
+      shuffleUpcoming(tracks, -1);
+    }
     play(0).catch(showError);
   } else if (list === "wave") {
     refill().then(() => {
@@ -1026,11 +1036,24 @@ async function select(name) {
 
       let pool = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
       if (liked.size > 0 || historyIds.length > 0) {
-        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id));
-        const historyTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && historyIds.includes(t.id));
+        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id)).sort(() => Math.random() - 0.5);
+        const historyTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
         const otherTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && !historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
         pool = [...likedTracks, ...historyTracks, ...otherTracks];
       }
+
+      // Приоритет недавних треков: недавно прослушанные опускаем в конец очереди
+      if (recentPlayed.size > 0) {
+        const recentList = Array.from(recentPlayed);
+        pool.sort((a, b) => {
+          const aRec = recentList.indexOf(a.id);
+          const bRec = recentList.indexOf(b.id);
+          if (aRec === -1 && bRec !== -1) return -1;
+          if (aRec !== -1 && bRec === -1) return 1;
+          return aRec - bRec;
+        });
+      }
+
       // Устраняем дубликаты треков в очереди
       const seen = new Set();
       result = [];
@@ -1046,7 +1069,8 @@ async function select(name) {
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
   if (isShuffle && tracks.length > 1) {
-    shuffleUpcoming(tracks, 0);
+    shuffleUpcoming(tracks, -1);
+    index = 0;
   }
   render();
 
@@ -1112,9 +1136,11 @@ el("shuffle").onclick = () => {
   isShuffle = !isShuffle;
   updateShuffleIcon(isShuffle);
   if (isShuffle) {
-    shuffleUpcoming(tracks, index);
-    render();
+    const isPlaying = document.body.classList.contains("playing");
+    shuffleUpcoming(tracks, isPlaying ? index : -1);
+    if (!isPlaying) index = 0;
   }
+  render();
 };
 
 const repeatBtn = el("repeat");
