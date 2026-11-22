@@ -17,7 +17,7 @@ const SEARCH_RELEASES = [{
   title: "park music =)))))",
   duration_sec: 135,
   aliases: ["onda andar", "онда андар", "онда андер", "типа 0", "тип 0"],
-  release_url: "https://sber-zvuk.com/track/190302374",
+  audio_url: getAssetUrl("assets/track_type_0_park_music.mp3"),
 }];
 
 // Каталог популярных треков: реальное аудио 1-к-1 с точной реальной длительностью
@@ -602,7 +602,7 @@ function updateShuffleIcon(active) {
 
 function render() {
   const t = current();
-  el("like").disabled = !t || Boolean(t.release_url);
+  el("like").disabled = !t;
   el("title").textContent = t ? t.title : (list === "favorites" ? "Мои треки" : "ПРИЗРАК");
   el("artist").textContent = t ? t.artist : (list === "favorites" ? "Любимая музыка" : "PR1ZRAK Sound");
 
@@ -634,7 +634,7 @@ function render() {
     li.className = "track-row" + (i === index ? " active" : "");
     li.setAttribute("role", "button");
     li.setAttribute("tabindex", "0");
-    li.title = `${track.release_url ? "Открыть в Звуке" : "Воспроизвести"} ${track.artist} — ${track.title}`;
+    li.title = `Воспроизвести ${track.artist} — ${track.title}`;
 
     const infoSpan = document.createElement("span");
     infoSpan.className = "track-info-btn";
@@ -643,7 +643,7 @@ function render() {
 
     const trackDur = document.createElement("span");
     trackDur.className = "track-duration-text";
-    trackDur.textContent = track.release_url ? "Слушать в Звуке ↗" : clock(track.duration_sec);
+    trackDur.textContent = clock(track.duration_sec);
 
     li.append(infoSpan, trackDur);
 
@@ -734,13 +734,6 @@ async function play(i) {
   if (!tracks[i]) {
     i = 0;
   }
-  if (tracks[i].release_url) {
-    pausePlayback();
-    const url = tracks[i].release_url;
-    if (tg?.openLink) tg.openLink(url);
-    else window.open(url, "_blank", "noopener,noreferrer");
-    return;
-  }
   const sessionId = ++currentSessionId;
   index = i;
   const selected = tracks[i];
@@ -823,7 +816,9 @@ async function play(i) {
 
   if (!playedSuccessfully) {
     stopCurrentAudio();
-    el("status").textContent = "Не удалось воспроизвести трек.";
+    el("status").textContent = SEARCH_RELEASES.includes(selected)
+      ? "Полная запись пока недоступна в плеере."
+      : "Не удалось воспроизвести трек.";
     return;
   }
 
