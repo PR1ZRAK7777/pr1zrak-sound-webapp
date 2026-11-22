@@ -1,5 +1,5 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=5";
-import {makeVisualizer} from "./visualizer.js?v=5";
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=6";
+import {makeVisualizer} from "./visualizer.js?v=6";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -232,7 +232,7 @@ class ProceduralSynth {
   }
 
   playKick(time) {
-    if (!audioCtx || !masterGain) return;
+    if (!audioCtx || !masterGain || !this.isPlaying) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.frequency.setValueAtTime(160, time);
@@ -246,7 +246,7 @@ class ProceduralSynth {
   }
 
   playSnare(time) {
-    if (!audioCtx || !masterGain) return;
+    if (!audioCtx || !masterGain || !this.isPlaying) return;
     const bufferSize = Math.floor(audioCtx.sampleRate * 0.14);
     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -267,7 +267,7 @@ class ProceduralSynth {
   }
 
   playHiHat(time) {
-    if (!audioCtx || !masterGain) return;
+    if (!audioCtx || !masterGain || !this.isPlaying) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = "triangle";
@@ -281,7 +281,7 @@ class ProceduralSynth {
   }
 
   playBassNote(freq, time, duration = 0.32) {
-    if (!audioCtx || !masterGain) return;
+    if (!audioCtx || !masterGain || !this.isPlaying) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = "sawtooth";
@@ -300,6 +300,7 @@ class ProceduralSynth {
 
   start(onTick) {
     ensureAudioContext();
+    this.stop();
     this.isPlaying = true;
     document.body.classList.add("playing");
     visualizer.setPlaying(true, () => this.currentTime);
@@ -343,13 +344,18 @@ class ProceduralSynth {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    this.currentTime = 0;
+    this.step = 0;
   }
 }
 
 const synth = new ProceduralSynth();
 
-/* ────────────────── ДЕКОДИРОВАННЫЙ WEB AUDIO БУФЕРНЫЙ ПЛЕЕР (ДЛЯ iOS И ТЕЛЕГРАМА) ────────────────── */
+/* ────────────────── ДЕКОДИРОВАННЫЙ WEB AUDIO БУФЕРНЫЙ ПЛЕЕР (СТРОГАЯ МОНОПОЛИЯ) ────────────────── */
+let currentSessionId = 0;
 const audioBufferCache = new Map();
+const audioBufferPendingLoads = new Map();
+const activeBufferSources = new Set();
 let currentBufferSource = null;
 let bufferPlaybackStartTime = 0;
 let bufferPauseOffset = 0;
@@ -358,55 +364,131 @@ let currentDecodedBuffer = null;
 
 async function loadAudioBuffer(url) {
   if (audioBufferCache.has(url)) return audioBufferCache.get(url);
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("fetch failed");
-    const arrayBuf = await res.arrayBuffer();
-    const ctx = ensureAudioContext();
-    if (!ctx) return null;
-    const decoded = await ctx.decodeAudioData(arrayBuf);
-    audioBufferCache.set(url, decoded);
-    return decoded;
-  } catch (_) {
-    return null;
-  }
-}
+  if (audioBufferPendingLoads.has(url)) return audioBufferPendingLoads.get(url);
 
-function stopBufferSource() {
-  if (currentBufferSource) {
+  const promise = (async () => {
     try {
-      currentBufferSource.stop();
-      currentBufferSource.disconnect();
-    } catch (_) {}
-    currentBufferSource = null;
-  }
-  isBufferPlaying = false;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("fetch failed");
+      const arrayBuf = await res.arrayBuffer();
+      const ctx = ensureAudioContext();
+      if (!ctx) return null;
+      const decoded = await ctx.decodeAudioData(arrayBuf);
+      audioBufferCache.set(url, decoded);
+      return decoded;
+    } catch (_) {
+      return null;
+    } finally {
+      audioBufferPendingLoads.delete(url);
+    }
+  })();
+
+  audioBufferPendingLoads.set(url, promise);
+  return promise;
 }
 
-function playBufferSource(buffer, offset = 0, onEnded = null) {
-  stopBufferSource();
+function stopCurrentAudio(keepPauseState = false) {
+  // 1. Немедленно останавливаем и отключаем ВСЕ буферные ноды
+  for (const s of activeBufferSources) {
+    try {
+      s.onended = null;
+      s.stop(0);
+      s.disconnect();
+    } catch (_) {}
+  }
+  activeBufferSources.clear();
+  currentBufferSource = null;
+  isBufferPlaying = false;
+
+  if (!keepPauseState) {
+    bufferPauseOffset = 0;
+    currentDecodedBuffer = null;
+  }
+
+  // 2. Глушим HTML5 audio
+  try {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  } catch (_) {}
+
+  // 3. Глушим синтезатор
+  if (synth.isPlaying) {
+    synth.stop();
+  }
+
+  // 4. Останавливаем опрос времени
+  stopProgressTicker();
+}
+
+function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
+  if (sessionId !== currentSessionId) return false;
+
+  // Очищаем любые предыдущие звуки
+  for (const s of activeBufferSources) {
+    try {
+      s.onended = null;
+      s.stop(0);
+      s.disconnect();
+    } catch (_) {}
+  }
+  activeBufferSources.clear();
+
+  try {
+    audio.pause();
+    audio.removeAttribute("src");
+  } catch (_) {}
+  if (synth.isPlaying) {
+    synth.stop();
+  }
+
   const ctx = ensureAudioContext();
   if (!ctx || !masterGain) return false;
 
-  currentBufferSource = ctx.createBufferSource();
-  currentBufferSource.buffer = buffer;
-  currentBufferSource.connect(masterGain);
+  let source;
+  try {
+    source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(masterGain);
+  } catch (_) {
+    return false;
+  }
 
+  currentBufferSource = source;
   currentDecodedBuffer = buffer;
+  activeBufferSources.add(source);
   bufferPlaybackStartTime = ctx.currentTime - offset;
   bufferPauseOffset = offset;
   isBufferPlaying = true;
 
-  currentBufferSource.onended = () => {
-    if (isBufferPlaying && onEnded) onEnded();
+  source.onended = () => {
+    activeBufferSources.delete(source);
+    const wasPlaying = isBufferPlaying && (currentBufferSource === source);
+    if (currentBufferSource === source) {
+      currentBufferSource = null;
+      isBufferPlaying = false;
+    }
+    // Автопереход на следующий трек ТОЛЬКО если это была текущая сессия
+    if (sessionId === currentSessionId && wasPlaying) {
+      play(index + 1).catch(showError);
+    }
   };
 
-  currentBufferSource.start(0, offset);
-  return true;
+  try {
+    source.start(0, offset);
+    return true;
+  } catch (_) {
+    activeBufferSources.delete(source);
+    if (currentBufferSource === source) {
+      currentBufferSource = null;
+      isBufferPlaying = false;
+    }
+    return false;
+  }
 }
 
 /* ────────────────── СОСТОЯНИЕ ПЛЕЕРА И КАТАЛОГА ────────────────── */
-let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, song = 0, objectURL = null, refilling = false;
+let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, objectURL = null, refilling = false;
 
 const current = () => tracks[index];
 const clock = s => {
@@ -424,7 +506,7 @@ function getCurrentPlaybackTime() {
   if (synth.isPlaying) {
     return synth.currentTime;
   }
-  return 0;
+  return bufferPauseOffset || 0;
 }
 
 function getCurrentTotalDuration() {
@@ -495,8 +577,8 @@ function updateLikeIcon(isLiked) {
 function render() {
   const t = current();
   el("like").disabled = !t;
-  el("title").textContent = t ? t.title : "ПРИЗРАК";
-  el("artist").textContent = t ? t.artist : "PR1ZRAK Sound";
+  el("title").textContent = t ? t.title : (list === "favorites" ? "Мои треки" : "ПРИЗРАК");
+  el("artist").textContent = t ? t.artist : (list === "favorites" ? "Любимая музыка" : "PR1ZRAK Sound");
 
   const isLiked = Boolean(t && liked.has(t.id));
   updateLikeIcon(isLiked);
@@ -504,6 +586,20 @@ function render() {
 
   const queueEl = el("queue");
   queueEl.innerHTML = "";
+
+  if (!tracks.length) {
+    const emptyLi = document.createElement("li");
+    emptyLi.className = "track-empty-msg";
+    emptyLi.style.cssText = "color: rgba(255,255,255,0.45); text-align: center; padding: 28px 16px; font-size: 13px; list-style: none; line-height: 1.6;";
+    if (list === "favorites") {
+      emptyLi.innerHTML = "В «Моих треках» пока пусто.<br>Находите любимую музыку через поиск и ставьте ❤️!";
+    } else {
+      emptyLi.textContent = "Список воспроизведения пуст.";
+    }
+    queueEl.append(emptyLi);
+    return;
+  }
+
   tracks.forEach((track, i) => {
     const li = document.createElement("li");
     li.className = "track-row" + (i === index ? " active" : "");
@@ -540,8 +636,15 @@ async function refill() {
         render();
       }
     } else {
-      const shuffled = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
-      appendWaveBatch(tracks, index, shuffled.slice(0, 5));
+      let candidates = [...SEED_CATALOG];
+      if (liked.size > 0) {
+        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id));
+        const remaining = SEED_CATALOG.filter(t => !liked.has(t.id)).sort(() => Math.random() - 0.5);
+        candidates = [...likedTracks, ...remaining];
+      } else {
+        candidates.sort(() => Math.random() - 0.5);
+      }
+      appendWaveBatch(tracks, index, candidates.slice(0, 5));
       render();
     }
   } finally {
@@ -551,16 +654,26 @@ async function refill() {
 
 // Регулярный опрос таймера воспроизведения для обновления ползунка и ауры
 let progressTicker = null;
-function startProgressTicker() {
-  if (progressTicker) return;
+function startProgressTicker(sessionId) {
+  if (progressTicker) {
+    clearInterval(progressTicker);
+    progressTicker = null;
+  }
+  let sessionEndedHandled = false;
   progressTicker = setInterval(() => {
+    if (sessionId !== currentSessionId) {
+      clearInterval(progressTicker);
+      progressTicker = null;
+      return;
+    }
     const cur = getCurrentPlaybackTime();
     const dur = getCurrentTotalDuration();
     if (dur > 0) {
       el("time").textContent = clock(cur);
       el("time-total").textContent = clock(dur);
-      el("seek").value = (100 * cur) / dur;
-      if (cur >= dur) {
+      el("seek").value = Math.min(100, (100 * cur) / dur);
+      if (cur >= dur - 0.25 && !sessionEndedHandled) {
+        sessionEndedHandled = true;
         play(index + 1).catch(showError);
       }
     }
@@ -574,21 +687,18 @@ function stopProgressTicker() {
   }
 }
 
-/* ────────────────── ВОСПРОИЗВЕДЕНИЕ ТРЕКА ────────────────── */
+/* ────────────────── ВОСПРОИЗВЕДЕНИЕ ТРЕКА (СТРОГАЯ МОНОПОЛИЯ) ────────────────── */
 async function play(i) {
+  if (!tracks || tracks.length === 0) return;
   if (!tracks[i]) {
-    if (tracks.length > 0) i = 0;
-    else return;
+    i = 0;
   }
-  const id = ++song;
-  const selected = tracks[i];
+  const sessionId = ++currentSessionId;
   index = i;
+  const selected = tracks[i];
 
-  // Останавливаем все предыдущие источники
-  synth.stop();
-  stopBufferSource();
-  audio.pause();
-  audio.muted = true;
+  // СТРОГАЯ МОНОПОЛИЯ: немедленно глушим абсолютно все звуки и ноды
+  stopCurrentAudio(false);
   render();
 
   el("status").textContent = "Студийный звук • 320 kbps";
@@ -602,34 +712,36 @@ async function play(i) {
   if (!isGitHubPages) {
     try {
       const res = await api("audio/" + selected.id);
+      if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если сессия сменилась
       if (res && res.ok) {
         const blob = await res.blob();
-        if (id !== song) return;
+        if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если сессия сменилась
         if (objectURL) URL.revokeObjectURL(objectURL);
         streamSrc = objectURL = URL.createObjectURL(blob);
       }
     } catch (_) {}
   }
 
-  // 1. Попытка воспроизведения через Web Audio Buffer (гарантирует звук на iOS даже при Silent Switch!)
+  if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул!
+
+  // 1. Попытка воспроизведения через Web Audio Buffer
   let playedSuccessfully = false;
-  let cachedBuffer = audioBufferCache.get(streamSrc);
+  const cachedBuffer = audioBufferCache.get(streamSrc);
 
   if (cachedBuffer) {
-    playBufferSource(cachedBuffer, 0, () => play(index + 1));
-    playedSuccessfully = true;
+    if (sessionId !== currentSessionId) return;
+    playedSuccessfully = playBufferSource(cachedBuffer, 0, sessionId);
   } else {
     try {
       const buf = await loadAudioBuffer(streamSrc);
-      if (id !== song) return;
+      if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул во время загрузки!
       if (buf) {
-        playBufferSource(buf, 0, () => play(index + 1));
-        playedSuccessfully = true;
+        playedSuccessfully = playBufferSource(buf, 0, sessionId);
       }
     } catch (_) {}
 
-    // Фолбэк на HTML5 audio если буфер не удалось декодировать
-    if (!playedSuccessfully) {
+    // Фолбэк на HTML5 audio ТОЛЬКО если буфер не сработал и сессия всё ещё активна
+    if (!playedSuccessfully && sessionId === currentSessionId) {
       try {
         audio.src = streamSrc;
         audio.volume = currentVolume;
@@ -638,16 +750,32 @@ async function play(i) {
         if (playPromise !== undefined) {
           await playPromise;
         }
+        if (sessionId !== currentSessionId) {
+          audio.pause();
+          audio.removeAttribute("src");
+          return;
+        }
         playedSuccessfully = true;
-      } catch (_) {
+      } catch (err) {
+        if (sessionId !== currentSessionId) return;
         playedSuccessfully = false;
       }
     }
   }
 
-  // 2. Если оба способа заблокированы политикой браузера — мгновенно включаем синтезатор
+  // Финальная проверка сессии перед переходом в режим воспроизведения
+  if (sessionId !== currentSessionId) {
+    stopCurrentAudio();
+    return;
+  }
+
+  // 2. Если оба способа заблокированы политикой браузера — включаем синтезатор
   if (!playedSuccessfully) {
     synth.start((currentTime, totalDuration) => {
+      if (sessionId !== currentSessionId) {
+        synth.stop();
+        return;
+      }
       el("time").textContent = clock(currentTime);
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
@@ -657,7 +785,18 @@ async function play(i) {
   document.body.classList.add("playing");
   updatePlayIcon(true);
   visualizer.setPlaying(true, getCurrentPlaybackTime);
-  startProgressTicker();
+  startProgressTicker(sessionId);
+
+  // Запись в историю прослушиваний для персонализации Волны
+  try {
+    const historyStr = localStorage.getItem("pr1zrak_history");
+    const history = historyStr ? JSON.parse(historyStr) : [];
+    if (!history.includes(selected.id)) {
+      history.push(selected.id);
+      if (history.length > 50) history.shift();
+      localStorage.setItem("pr1zrak_history", JSON.stringify(history));
+    }
+  } catch (_) {}
 
   if (!isGitHubPages) {
     api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
@@ -666,37 +805,34 @@ async function play(i) {
 }
 
 function pausePlayback() {
-  if (isBufferPlaying) {
-    bufferPauseOffset = getCurrentPlaybackTime();
-    stopBufferSource();
-  }
-  if (synth.isPlaying) {
-    synth.stop();
-  }
-  if (!audio.paused) {
-    audio.pause();
-  }
+  bufferPauseOffset = getCurrentPlaybackTime();
+  // Останавливаем воспроизведение, но сохраняем буфер для resume
+  stopCurrentAudio(true);
   document.body.classList.remove("playing");
   updatePlayIcon(false);
   visualizer.setPlaying(false);
-  stopProgressTicker();
 }
 
 function resumePlayback() {
   unlockAudioEngine();
+  const sessionId = ++currentSessionId;
   if (currentDecodedBuffer && bufferPauseOffset > 0) {
-    playBufferSource(currentDecodedBuffer, bufferPauseOffset, () => play(index + 1));
+    playBufferSource(currentDecodedBuffer, bufferPauseOffset, sessionId);
     document.body.classList.add("playing");
     updatePlayIcon(true);
     visualizer.setPlaying(true, getCurrentPlaybackTime);
-    startProgressTicker();
+    startProgressTicker(sessionId);
   } else if (audio.getAttribute("src")) {
     audio.muted = false;
     audio.play().then(() => {
+      if (sessionId !== currentSessionId) {
+        audio.pause();
+        return;
+      }
       document.body.classList.add("playing");
       updatePlayIcon(true);
       visualizer.setPlaying(true, getCurrentPlaybackTime);
-      startProgressTicker();
+      startProgressTicker(sessionId);
     }).catch(() => play(index));
   } else {
     play(index).catch(showError);
@@ -716,10 +852,8 @@ auraWrapper?.addEventListener("click", togglePlayPause);
 
 async function select(name) {
   const r = ++revision;
-  ++song;
-  pausePlayback();
-  audio.removeAttribute("src");
-  audio.load();
+  const sessionId = ++currentSessionId;
+  stopCurrentAudio(false);
 
   tracks = [];
   index = 0;
@@ -735,7 +869,7 @@ async function select(name) {
 
   const lt = el("list-title");
   if (lt) {
-    lt.textContent = name === "favorites" ? "Мои сохранённые треки" : name === "top" ? "Топ хитов" : "Очередь воспроизведения";
+    lt.textContent = name === "favorites" ? "Мои треки" : name === "top" ? "Топ хитов" : "Моя Волна";
   }
 
   let result = null;
@@ -748,20 +882,42 @@ async function select(name) {
     }
   }
 
+  if (r !== revision || sessionId !== currentSessionId) return;
+
   if (!result || !result.length) {
     if (name === "favorites") {
+      // У нового пользователя в "Моих треках" ИЗНАЧАЛЬНО 0 ТРЕКОВ!
       result = SEED_CATALOG.filter(t => liked.has(t.id));
     } else if (name === "top") {
       result = [...SEED_CATALOG];
     } else {
-      result = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
+      // Персонализация Волны на основе любимых треков и истории
+      let historyIds = [];
+      try {
+        const hist = localStorage.getItem("pr1zrak_history");
+        if (hist) historyIds = JSON.parse(hist);
+      } catch (_) {}
+
+      if (liked.size > 0 || historyIds.length > 0) {
+        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id));
+        const historyTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && historyIds.includes(t.id));
+        const otherTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && !historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
+        result = [...likedTracks, ...historyTracks, ...otherTracks];
+      } else {
+        result = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
+      }
     }
   }
 
-  if (r !== revision) return;
+  if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
   render();
-  el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Пока нет треков.";
+
+  if (name === "favorites" && tracks.length === 0) {
+    el("status").textContent = "В Моих треках пока пусто. Добавляйте треки сердечком ❤️";
+  } else {
+    el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Пока нет треков.";
+  }
 
   // Фоновая предзагрузка первых MP3 в буфер Web Audio
   if (tracks.length > 0) {
@@ -774,15 +930,22 @@ for (const b of document.querySelectorAll("[data-list]")) {
   b.onclick = () => select(b.dataset.list).catch(showError);
 }
 
-el("next").onclick = () => play(index + 1).catch(showError);
-el("prev").onclick = () => play(Math.max(index - 1, 0)).catch(showError);
+el("next").onclick = () => {
+  if (!tracks.length) return;
+  play(index + 1).catch(showError);
+};
+
+el("prev").onclick = () => {
+  if (!tracks.length) return;
+  play(index > 0 ? index - 1 : 0).catch(showError);
+};
 
 el("seek").oninput = e => {
   const dur = getCurrentTotalDuration();
   if (dur > 0) {
     const newPos = (dur * e.target.value) / 100;
     if (isBufferPlaying && currentDecodedBuffer) {
-      playBufferSource(currentDecodedBuffer, newPos, () => play(index + 1));
+      playBufferSource(currentDecodedBuffer, newPos, currentSessionId);
     } else if (audio.duration && !audio.paused) {
       audio.currentTime = newPos;
     } else if (synth.isPlaying) {
@@ -819,10 +982,8 @@ async function doSearch() {
   if (!query) return;
 
   const r = ++revision;
-  ++song;
-  pausePlayback();
-  audio.removeAttribute("src");
-  audio.load();
+  const sessionId = ++currentSessionId;
+  stopCurrentAudio(false);
 
   tracks = [];
   index = 0;
@@ -849,6 +1010,8 @@ async function doSearch() {
       resTracks = await res.json();
     }
   }
+
+  if (r !== revision || sessionId !== currentSessionId) return;
 
   if (!resTracks || !resTracks.length) {
     const qLower = query.toLowerCase();
@@ -879,7 +1042,7 @@ async function doSearch() {
     }
   }
 
-  if (r !== revision) return;
+  if (r !== revision || sessionId !== currentSessionId) return;
   tracks = resTracks;
   render();
   el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Ничего не найдено.";
@@ -916,15 +1079,16 @@ el("like").onclick = async () => {
       const playing = current()?.id;
       tracks = tracks.filter(track => track.id !== t.id);
       if (playing === t.id) {
-        ++song;
-        pausePlayback();
-        audio.removeAttribute("src");
-        audio.load();
+        stopCurrentAudio(false);
         index = Math.max(0, Math.min(index, tracks.length - 1));
+        if (tracks.length > 0) {
+          play(index).catch(showError);
+        } else {
+          el("status").textContent = "В Моих треках пока пусто. Добавляйте треки сердечком ❤️";
+        }
       } else {
         index = tracks.findIndex(track => track.id === playing);
       }
-      if (!tracks.length) el("status").textContent = "В избранном пока нет треков.";
     }
     render();
   } catch (e) {
@@ -961,7 +1125,7 @@ async function init() {
   }
 
   await select("wave");
-  // Фоновая предзагрузка первых буферов аудио в Web Audio для нулевой задержки старта
+  // Фоновая предзагрузка первых буферов аудио в Web Audio для мгновенного старта
   SEED_CATALOG.slice(0, 4).forEach(t => loadAudioBuffer(t.audio_url).catch(() => {}));
 }
 
