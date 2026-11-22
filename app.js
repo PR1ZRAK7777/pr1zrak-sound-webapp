@@ -14,26 +14,34 @@ const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
 
 // Локальные проверенные MP3 файлы (абсолютные URL, гарантирующие работу на GitHub Pages)
 const MP3_LOCAL_PREVIEWS = [
-  getAssetUrl("assets/preview1.mp3"),
-  getAssetUrl("assets/preview2.mp3"),
-  getAssetUrl("assets/preview3.mp3"),
-  getAssetUrl("assets/preview4.mp3")
+  getAssetUrl("assets/track_femlove_1000_7.mp3"),
+  getAssetUrl("assets/track_shadowraze_showdown.mp3"),
+  getAssetUrl("assets/track_miyagi_minor.mp3"),
+  getAssetUrl("assets/track_macan_yug.mp3"),
+  getAssetUrl("assets/track_linkinpark_numb.mp3"),
+  getAssetUrl("assets/track_tape_kizaru_99problems.mp3"),
+  getAssetUrl("assets/track_macan_asphalt8.mp3"),
+  getAssetUrl("assets/track_lxstcxntury_odium.mp3"),
+  getAssetUrl("assets/track_dvrst_close_eyes.mp3"),
+  getAssetUrl("assets/track_scriptonite_polozhenie.mp3"),
+  getAssetUrl("assets/track_ogbuda_bandit.mp3"),
+  getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
 ];
 
-// Каталог популярных треков
+// Каталог популярных треков: реальное аудио для каждого трека 1-к-1
 const SEED_CATALOG = [
-  { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 192, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
-  { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 145, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
-  { id: 103, artist: "prodwhiteball & ProdbyJane", title: "ural mountains", duration_sec: 113, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
-  { id: 104, artist: "Miyagi & Andy Panda", title: "Minor", duration_sec: 175, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[0] },
-  { id: 105, artist: "Big Baby Tape & Kizaru", title: "99 Problems", duration_sec: 154, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
-  { id: 106, artist: "Macan", title: "ASPHALT 8", duration_sec: 160, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
-  { id: 107, artist: "LXST CXNTURY", title: "ODIUM", duration_sec: 168, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
-  { id: 108, artist: "DVRST", title: "Close Eyes", duration_sec: 132, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
-  { id: 109, artist: "SCIRENA", title: "Восемь", duration_sec: 180, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[0] },
-  { id: 110, artist: "Скриптонит", title: "Положение", duration_sec: 200, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
-  { id: 111, artist: "OG Buda", title: "Бандит", duration_sec: 140, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
-  { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 158, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
+  { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_femlove_1000_7.mp3") },
+  { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_shadowraze_showdown.mp3") },
+  { id: 103, artist: "Miyagi & Andy Panda", title: "Minor", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_miyagi_minor.mp3") },
+  { id: 104, artist: "MACAN", title: "Юг", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_macan_yug.mp3") },
+  { id: 105, artist: "Linkin Park", title: "Numb", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_linkinpark_numb.mp3") },
+  { id: 106, artist: "Big Baby Tape & Kizaru", title: "99 Problems", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_tape_kizaru_99problems.mp3") },
+  { id: 107, artist: "Macan", title: "ASPHALT 8", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_macan_asphalt8.mp3") },
+  { id: 108, artist: "LXST CXNTURY", title: "ODIUM", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_lxstcxntury_odium.mp3") },
+  { id: 109, artist: "DVRST", title: "Close Eyes", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_dvrst_close_eyes.mp3") },
+  { id: 110, artist: "Скриптонит", title: "Положение", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_scriptonite_polozhenie.mp3") },
+  { id: 111, artist: "OG Buda", title: "Бандит", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_ogbuda_bandit.mp3") },
+  { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_pharaoh_black_siemens.mp3") },
 ];
 
 /* ────────────────── ЕДИНЫЙ АУДИОКОНТЕКСТ И АНАЛИЗАТОР ────────────────── */
@@ -728,13 +736,20 @@ async function doSearch() {
     const qLower = query.toLowerCase();
     resTracks = SEED_CATALOG.filter(t => `${t.artist} ${t.title}`.toLowerCase().includes(qLower));
     if (!resTracks.length) {
+      const match = SEED_CATALOG.find(t =>
+        qLower.includes(t.title.toLowerCase()) ||
+        qLower.includes(t.artist.toLowerCase()) ||
+        t.title.toLowerCase().includes(qLower) ||
+        t.artist.toLowerCase().includes(qLower)
+      ) || SEED_CATALOG[0];
+
       resTracks = [{
         id: 999,
-        artist: "Найдено по запросу",
-        title: query,
-        duration_sec: 180,
-        cover_url: DEFAULT_COVER,
-        audio_url: MP3_LOCAL_PREVIEWS[0]
+        artist: match.artist,
+        title: match.title,
+        duration_sec: match.duration_sec,
+        cover_url: match.cover_url,
+        audio_url: match.audio_url
       }];
     }
   }

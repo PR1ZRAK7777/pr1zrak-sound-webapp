@@ -177,20 +177,27 @@ nav button {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px 0 2px;
+  padding: 8px 0 4px;
   position: relative;
+  width: 100%;
 }
 
 .aura-container {
   position: relative;
-  width: min(86vw, 340px);
-  height: min(86vw, 340px);
+  width: min(80vw, 320px);
+  height: min(80vw, 320px);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border-radius: 50%;
+  background: transparent;
   transition: transform 0.15s ease-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 .aura-container:hover {
@@ -206,6 +213,7 @@ nav button {
   height: 100%;
   display: block;
   pointer-events: none;
+  border-radius: 50%;
 }
 
 /* ────────────────── ИНФОРМАЦИЯ О ТРЕКЕ ────────────────── */
