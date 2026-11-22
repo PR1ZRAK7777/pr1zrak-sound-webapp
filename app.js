@@ -18,7 +18,8 @@ function render(){
   el("like").disabled=!t;
   el("title").textContent=t?.title || "Моя Волна"; el("artist").textContent=t?.artist || "";
   const cover=el("cover");
-  if((cover.getAttribute("src") || "")!==(t?.cover_url || "")){cover.hidden=true;cover.removeAttribute("src");if(t?.cover_url)cover.src=t.cover_url;}
+  const art=t?.cover_url || "/webapp/assets/default-cover.png";
+  if(cover.getAttribute("src")!==art){cover.hidden=true;cover.src=art;}
   el("like").textContent=liked.has(t?.id)?"♥":"♡";
   el("like").setAttribute("aria-pressed",String(liked.has(t?.id)));
   el("queue").replaceChildren(...tracks.map((t,i)=>{
@@ -27,6 +28,7 @@ function render(){
     b.setAttribute("aria-current",String(i===index)); b.onclick=()=>play(i).catch(showError); li.append(b);return li;
   }));
 }
+el("cover").onerror=()=>{const img=el("cover");if(img.getAttribute("src")!=="/webapp/assets/default-cover.png")img.src="/webapp/assets/default-cover.png";};
 el("cover").onload=()=>el("cover").hidden=false;
 async function refill(){
   if(list!=="wave" || tracks.length-index>3 || refilling)return;
@@ -60,7 +62,7 @@ audio.onplay=()=>{el("play").textContent="Ⅱ";el("play").ariaLabel="Пауза"
 audio.onpause=()=>{el("play").textContent="▶";el("play").ariaLabel="Воспроизвести";};
 el("next").onclick=()=>play(index+1).catch(showError);el("prev").onclick=()=>play(Math.max(index-1,0)).catch(showError);
 audio.onended=()=>el("next").click();
-audio.ontimeupdate=()=>{const d=audio.duration || 0;el("time").textContent=clock(audio.currentTime)+" / "+clock(d);el("seek").value=d?100*audio.currentTime/d:0;};
+audio.ontimeupdate=()=>{const d=audio.duration || 0;el("time").textContent=clock(audio.currentTime)+" / "+clock(d);el("seek").value=d?100*audio.currentTime/d:0;el("sleeve").style.setProperty("--progress",(d?360*audio.currentTime/d:0)+"deg");};
 el("seek").oninput=e=>{if(audio.duration)audio.currentTime=audio.duration*e.target.value/100;};
 el("volume").oninput=e=>{const v=audio.volume=e.target.value/100;el("volumeLabel").textContent=(v===0?"🔇":v<.34?"🔈":v<.67?"🔉":"🔊")+" "+Math.round(v*100)+"%";};
 audio.volume=.85;
