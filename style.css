@@ -1,16 +1,16 @@
 :root {
   color-scheme: dark;
-  --bg-gradient: radial-gradient(circle at 50% 0%, #24242a 0%, #121216 45%, #070709 100%);
-  --panel-bg: rgba(22, 22, 27, 0.75);
-  --panel-border: rgba(255, 255, 255, 0.1);
+  --bg-color: #000000;
+  --panel-bg: rgba(10, 10, 12, 0.85);
+  --panel-border: rgba(255, 255, 255, 0.09);
   --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  --text-secondary: #94949e;
+  --text-tertiary: #5f5f69;
 
   /* Динамические цвета ауры */
   --aura-hue: 275deg;
-  --aura-primary: hsl(var(--aura-hue), 90%, 62%);
-  --aura-secondary: hsl(calc(var(--aura-hue) + 40deg), 95%, 52%);
+  --aura-primary: hsl(var(--aura-hue), 92%, 62%);
+  --aura-secondary: hsl(calc(var(--aura-hue) + 40deg), 96%, 52%);
   --aura-scale: 1;
 
   font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
@@ -21,7 +21,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg-gradient);
+  background: #000000;
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
@@ -36,7 +36,7 @@ main {
 
 /* ────────────────── КНОПКИ И НАВИГАЦИЯ (ЧЕРНО-БЕЛЫЙ ГРАДИЕНТ) ────────────────── */
 button {
-  background: linear-gradient(180deg, #26262e 0%, #15151a 100%);
+  background: linear-gradient(180deg, #18181e 0%, #0c0c10 100%);
   color: var(--text-primary);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -48,7 +48,7 @@ button {
 }
 
 button:hover {
-  background: linear-gradient(180deg, #30303a 0%, #1c1c22 100%);
+  background: linear-gradient(180deg, #24242e 0%, #121217 100%);
   border-color: rgba(255, 255, 255, 0.22);
 }
 
@@ -62,7 +62,7 @@ button:focus-visible {
 
 button[aria-pressed=true], #play {
   background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
-  color: #09090b;
+  color: #000000;
   border-color: #ffffff;
   font-weight: 700;
   box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
@@ -89,7 +89,7 @@ nav button {
 
 .search-bar input {
   flex: 1;
-  background: rgba(18, 18, 23, 0.85);
+  background: #08080a;
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   padding: 9px 13px;
@@ -106,7 +106,7 @@ nav button {
 
 .search-bar button {
   background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
-  color: #09090b;
+  color: #000000;
   border: 0;
   font-weight: 700;
   font-size: 13px;
@@ -119,10 +119,9 @@ nav button {
   gap: 10px;
   margin: 8px 0 6px;
   padding: 6px 14px;
-  background: rgba(20, 20, 25, 0.85);
+  background: #08080a;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
-  backdrop-filter: blur(8px);
 }
 
 .top-volume span {
@@ -297,7 +296,7 @@ li.track-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(18, 18, 23, 0.7);
+  background: #09090c;
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   margin-bottom: 6px;
@@ -306,13 +305,13 @@ li.track-row {
 }
 
 li.track-row:hover {
-  background: rgba(28, 28, 35, 0.9);
+  background: #141419;
   border-color: rgba(255, 255, 255, 0.2);
 }
 
 li.track-row.active {
   border-color: #ffffff;
-  background: rgba(35, 35, 45, 0.95);
+  background: #181820;
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
 }
 

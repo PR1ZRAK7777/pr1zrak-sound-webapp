@@ -636,8 +636,8 @@ async function init() {
   if (tg) {
     tg.ready();
     tg.expand();
-    if (tg.setHeaderColor) tg.setHeaderColor("#121216");
-    if (tg.setBackgroundColor) tg.setBackgroundColor("#070709");
+    if (tg.setHeaderColor) tg.setHeaderColor("#000000");
+    if (tg.setBackgroundColor) tg.setBackgroundColor("#000000");
   }
 
   try {
