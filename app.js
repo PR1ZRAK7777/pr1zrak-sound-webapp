@@ -538,17 +538,6 @@ function showError(e) {
   }
 }
 
-function downloadInTelegram(t) {
-  if (!t) return;
-  const q = encodeURIComponent(`${t.artist} - ${t.title}`);
-  const botUrl = `https://t.me/PR1ZRAKWORK_BOT?start=dl_${q}`;
-  if (tg && typeof tg.openTelegramLink === "function") {
-    tg.openTelegramLink(botUrl);
-  } else {
-    window.open(botUrl, "_blank");
-  }
-}
-
 function updatePlayIcon(isPlaying) {
   const icon = el("play-icon");
   if (!icon) return;
@@ -648,22 +637,10 @@ function render() {
     trackDur.className = "track-duration-text";
     trackDur.textContent = clock(track.duration_sec);
 
-    const btnDl = document.createElement("button");
-    btnDl.className = "track-dl-icon";
-    btnDl.textContent = "MP3";
-    btnDl.title = "Скачать в Telegram (320 kbps)";
-    btnDl.onclick = (e) => {
-      e.stopPropagation();
-      downloadInTelegram(track);
-    };
-
-    li.append(infoSpan, trackDur, btnDl);
+    li.append(infoSpan, trackDur);
 
     // Клик по любому месту строки трека мгновенно запускает воспроизведение
-    li.onclick = (e) => {
-      if (e.target.closest(".track-dl-icon")) return;
-      play(i).catch(showError);
-    };
+    li.onclick = () => play(i).catch(showError);
     li.onkeydown = (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -1162,6 +1139,12 @@ async function doSearch() {
   const r = ++revision;
   const sessionId = ++currentSessionId;
   stopCurrentAudio(false);
+  document.body.classList.remove("playing");
+  updatePlayIcon(false);
+  visualizer.setPlaying(false);
+  el("seek").value = 0;
+  el("time").textContent = "0:00";
+  el("time-total").textContent = "0:00";
 
   tracks = [];
   index = 0;
@@ -1192,24 +1175,23 @@ async function doSearch() {
   if (r !== revision || sessionId !== currentSessionId) return;
 
   if (!resTracks || !resTracks.length) {
-    const qLower = query.toLowerCase();
+    const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+    const generic = new Set(["music", "музыка", "song", "песня"]);
+    const terms = words.filter(word => !generic.has(word));
+    const required = terms.length ? terms : words;
     resTracks = SEED_CATALOG.filter(t => {
-      const full = `${t.artist} ${t.title}`.toLowerCase();
-      if (full.includes(qLower) || qLower.includes(t.title.toLowerCase()) || qLower.includes(t.artist.toLowerCase())) {
-        return true;
-      }
-      if (t.aliases && t.aliases.some(a => qLower.includes(a) || a.includes(qLower))) {
-        return true;
-      }
-      return false;
+      const haystack = [t.artist, t.title, ...(t.aliases || [])].join(" ").toLowerCase();
+      const catalogWords = haystack.match(/[\p{L}\p{N}]+/gu) || [];
+      return required.length > 0 && required.every(term =>
+        catalogWords.some(word => word === term || (term.length >= 3 && word.startsWith(term)))
+      );
     });
-
   }
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = resTracks;
   render();
-  el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Ничего не найдено.";
+  el("status").textContent = tracks.length ? "" : "В каталоге плеера ничего не найдено.";
   const lt = el("list-title");
   if (lt) lt.textContent = `Результаты поиска (${tracks.length})`;
 }
@@ -1260,10 +1242,6 @@ el("like").onclick = async () => {
   } finally {
     el("like").disabled = !current();
   }
-};
-
-el("dl-current-btn").onclick = () => {
-  downloadInTelegram(current());
 };
 
 async function init() {
