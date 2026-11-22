@@ -28,20 +28,16 @@
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
         </svg>
       </span>
-      <span id="volumeLabel">85%</span>
-      <input id="volume" type="range" min="0" max="100" value="85" aria-label="Громкость">
+      <span id="volumeLabel">100%</span>
+      <input id="volume" type="range" min="0" max="100" value="100" aria-label="Громкость">
     </div>
   </header>
 
   <section class="art">
-    <div class="aura-container">
+    <div class="aura-container" id="aura-wrapper" title="Нажмите для воспроизведения/паузы">
       <canvas id="aura-canvas" width="340" height="340" aria-label="Аура трека"></canvas>
-      <div id="sleeve">
-        <img id="cover" alt="Обложка" hidden>
-      </div>
     </div>
   </section>
-  <canvas id="spectrum" width="384" height="36" aria-hidden="true"></canvas>
 
   <h1 id="title">Загрузка музыки…</h1>
   <p id="artist">ПРИЗРАК</p>

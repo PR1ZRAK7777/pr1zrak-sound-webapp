@@ -5,21 +5,22 @@ const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
 const uid = tg?.initDataUnsafe?.user?.id || 0;
 const audio = el("audio");
-const sleeve = el("sleeve");
 const auraCanvas = el("aura-canvas");
-const visualizer = makeVisualizer(audio, el("spectrum"), sleeve, auraCanvas);
+const auraWrapper = el("aura-wrapper");
+const visualizer = makeVisualizer(auraCanvas);
 
-const DEFAULT_COVER = "./assets/default-cover.png";
+const getAssetUrl = path => new URL(path, import.meta.url).href;
+const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
 
-// Локальные проверенные MP3 файлы и fallback CDN
+// Локальные проверенные MP3 файлы (абсолютные URL, гарантирующие работу на GitHub Pages)
 const MP3_LOCAL_PREVIEWS = [
-  "./assets/preview1.mp3",
-  "./assets/preview2.mp3",
-  "./assets/preview3.mp3",
-  "./assets/preview4.mp3"
+  getAssetUrl("assets/preview1.mp3"),
+  getAssetUrl("assets/preview2.mp3"),
+  getAssetUrl("assets/preview3.mp3"),
+  getAssetUrl("assets/preview4.mp3")
 ];
 
-// Каталог популярных треков (чистый звук без зависимости от внешних CDN)
+// Каталог популярных треков
 const SEED_CATALOG = [
   { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 192, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
   { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 145, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
@@ -35,12 +36,61 @@ const SEED_CATALOG = [
   { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 158, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
 ];
 
-/* ────────────────── ВСТРОЕННЫЙ СИНТЕЗАТОР БИТОВ (100% ГАРАНТИЯ ЗВУКА) ────────────────── */
+/* ────────────────── ЕДИНЫЙ АУДИОКОНТЕКСТ И АНАЛИЗАТОР ────────────────── */
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let masterGain = null;
+let analyser = null;
+let currentVolume = 1.0;
+
+function ensureAudioContext() {
+  if (!audioCtx && AudioContextClass) {
+    try {
+      audioCtx = new AudioContextClass();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+
+      masterGain.connect(analyser);
+      analyser.connect(audioCtx.destination);
+
+      visualizer.start(audioCtx, analyser);
+    } catch (_) {}
+  }
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+
+// Глобальная разблокировка звука при любом пользовательском жесте
+function unlockAudioEngine() {
+  const ctx = ensureAudioContext();
+  if (ctx && ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  // Тихий импульс Web Audio для снятия аппаратных ограничений WebView (iOS / Android)
+  if (ctx) {
+    try {
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    } catch (_) {}
+  }
+}
+
+["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(evt => {
+  window.addEventListener(evt, unlockAudioEngine, { capture: true, passive: true });
+});
+
+/* ────────────────── ВСТРОЕННЫЙ СИНТЕЗАТОР БИТОВ (100% ФОЛЛБЭК ЗВУКА) ────────────────── */
 class ProceduralSynth {
   constructor() {
-    this.ctx = null;
-    this.analyser = null;
-    this.masterGain = null;
     this.isPlaying = false;
     this.step = 0;
     this.timer = null;
@@ -49,123 +99,103 @@ class ProceduralSynth {
     this.tempo = 126;
   }
 
-  ensureContext() {
-    if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      this.ctx = new AC();
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 256;
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = audio.volume || 0.85;
-      this.masterGain.connect(this.analyser);
-      this.analyser.connect(this.ctx.destination);
-    }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume().catch(() => {});
-    }
-  }
-
   setVolume(vol) {
-    if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(vol, this.ctx.currentTime);
+    if (masterGain && audioCtx) {
+      masterGain.gain.setValueAtTime(vol, audioCtx.currentTime);
     }
   }
 
   playKick(time) {
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    if (!audioCtx || !masterGain) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
     osc.frequency.setValueAtTime(160, time);
     osc.frequency.exponentialRampToValueAtTime(36, time + 0.18);
     gain.gain.setValueAtTime(1.0, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.40);
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(masterGain);
     osc.start(time);
     osc.stop(time + 0.42);
   }
 
   playSnare(time) {
-    if (!this.ctx) return;
-    const bufferSize = Math.floor(this.ctx.sampleRate * 0.14);
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    if (!audioCtx || !masterGain) return;
+    const bufferSize = Math.floor(audioCtx.sampleRate * 0.14);
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const noise = this.ctx.createBufferSource();
+    const noise = audioCtx.createBufferSource();
     noise.buffer = buffer;
-    const filter = this.ctx.createBiquadFilter();
+    const filter = audioCtx.createBiquadFilter();
     filter.type = "highpass";
     filter.frequency.value = 1100;
-    const gain = this.ctx.createGain();
+    const gain = audioCtx.createGain();
     gain.gain.setValueAtTime(0.7, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.14);
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(masterGain);
     noise.start(time);
     noise.stop(time + 0.15);
   }
 
   playHiHat(time) {
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    if (!audioCtx || !masterGain) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
     osc.type = "triangle";
     osc.frequency.setValueAtTime(7500, time);
     gain.gain.setValueAtTime(0.28, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(masterGain);
     osc.start(time);
     osc.stop(time + 0.06);
   }
 
   playBassNote(freq, time, duration = 0.32) {
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    if (!audioCtx || !masterGain) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
     osc.type = "sawtooth";
     osc.frequency.setValueAtTime(freq, time);
-    const filter = this.ctx.createBiquadFilter();
+    const filter = audioCtx.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.setValueAtTime(380, time);
     gain.gain.setValueAtTime(0.42, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(masterGain);
     osc.start(time);
     osc.stop(time + duration + 0.02);
   }
 
   start(onTick) {
-    this.ensureContext();
+    ensureAudioContext();
     this.isPlaying = true;
     document.body.classList.add("playing");
+    visualizer.setPlaying(true, () => this.currentTime);
+
     const secondsPerBeat = 60.0 / this.tempo;
     const stepDuration = secondsPerBeat / 4; // 16th notes
-
-    const notes = [55, 55, 65.41, 73.42, 55, 82.41, 73.42, 65.41]; // Phonk / Trap bass line
+    const notes = [55, 55, 65.41, 73.42, 55, 82.41, 73.42, 65.41]; // Phonk bass line
 
     const schedule = () => {
-      if (!this.isPlaying || !this.ctx) return;
-      const now = this.ctx.currentTime;
+      if (!this.isPlaying || !audioCtx) return;
+      const now = audioCtx.currentTime;
       const s = this.step % 16;
 
-      // 808 Kick на 0, 6, 10
       if (s === 0 || s === 6 || s === 10) {
         this.playKick(now);
       }
-      // Snare / Clap на 4, 12
       if (s === 4 || s === 12) {
         this.playSnare(now);
       }
-      // Hi-Hat на каждые четные 16-е
       if (s % 2 === 0) {
         this.playHiHat(now);
       }
-      // Басовая нота
       if (s === 0 || s === 3 || s === 8 || s === 11) {
         const n = notes[(Math.floor(this.step / 4)) % notes.length];
         this.playBassNote(n, now, stepDuration * 3);
@@ -183,7 +213,6 @@ class ProceduralSynth {
 
   stop() {
     this.isPlaying = false;
-    document.body.classList.remove("playing");
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -193,28 +222,64 @@ class ProceduralSynth {
 
 const synth = new ProceduralSynth();
 
-// Автоматическая глобальная разблокировка звука при первом касании / клике в Telegram WebApp
-function unlockAudioEngine() {
-  synth.ensureContext();
-  if (synth.ctx && synth.ctx.state === "suspended") {
-    synth.ctx.resume().catch(() => {});
-  }
-  // Тихий импульс Web Audio для снятия аппаратных ограничений WebView
-  if (synth.ctx) {
-    try {
-      const buffer = synth.ctx.createBuffer(1, 1, 22050);
-      const source = synth.ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(synth.ctx.destination);
-      source.start(0);
-    } catch (_) {}
+/* ────────────────── ДЕКОДИРОВАННЫЙ WEB AUDIO БУФЕРНЫЙ ПЛЕЕР (ДЛЯ iOS И ТЕЛЕГРАМА) ────────────────── */
+const audioBufferCache = new Map();
+let currentBufferSource = null;
+let bufferPlaybackStartTime = 0;
+let bufferPauseOffset = 0;
+let isBufferPlaying = false;
+let currentDecodedBuffer = null;
+
+async function loadAudioBuffer(url) {
+  if (audioBufferCache.has(url)) return audioBufferCache.get(url);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("fetch failed");
+    const arrayBuf = await res.arrayBuffer();
+    const ctx = ensureAudioContext();
+    if (!ctx) return null;
+    const decoded = await ctx.decodeAudioData(arrayBuf);
+    audioBufferCache.set(url, decoded);
+    return decoded;
+  } catch (_) {
+    return null;
   }
 }
 
-["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(evt => {
-  window.addEventListener(evt, unlockAudioEngine, { once: true, passive: true, capture: true });
-});
+function stopBufferSource() {
+  if (currentBufferSource) {
+    try {
+      currentBufferSource.stop();
+      currentBufferSource.disconnect();
+    } catch (_) {}
+    currentBufferSource = null;
+  }
+  isBufferPlaying = false;
+}
 
+function playBufferSource(buffer, offset = 0, onEnded = null) {
+  stopBufferSource();
+  const ctx = ensureAudioContext();
+  if (!ctx || !masterGain) return false;
+
+  currentBufferSource = ctx.createBufferSource();
+  currentBufferSource.buffer = buffer;
+  currentBufferSource.connect(masterGain);
+
+  currentDecodedBuffer = buffer;
+  bufferPlaybackStartTime = ctx.currentTime - offset;
+  bufferPauseOffset = offset;
+  isBufferPlaying = true;
+
+  currentBufferSource.onended = () => {
+    if (isBufferPlaying && onEnded) onEnded();
+  };
+
+  currentBufferSource.start(0, offset);
+  return true;
+}
+
+/* ────────────────── СОСТОЯНИЕ ПЛЕЕРА И КАТАЛОГА ────────────────── */
 let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, song = 0, objectURL = null, refilling = false;
 
 const current = () => tracks[index];
@@ -222,6 +287,29 @@ const clock = s => {
   if (!s || isNaN(s)) return "0:00";
   return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 };
+
+function getCurrentPlaybackTime() {
+  if (isBufferPlaying && audioCtx) {
+    return Math.max(0, audioCtx.currentTime - bufferPlaybackStartTime);
+  }
+  if (!audio.paused && audio.currentTime > 0) {
+    return audio.currentTime;
+  }
+  if (synth.isPlaying) {
+    return synth.currentTime;
+  }
+  return 0;
+}
+
+function getCurrentTotalDuration() {
+  if (currentDecodedBuffer) {
+    return currentDecodedBuffer.duration;
+  }
+  if (audio.duration && !isNaN(audio.duration)) {
+    return audio.duration;
+  }
+  return current()?.duration_sec || 35;
+}
 
 async function api(path, options = {}) {
   try {
@@ -284,13 +372,6 @@ function render() {
   el("title").textContent = t ? t.title : "ПРИЗРАК";
   el("artist").textContent = t ? t.artist : "PR1ZRAK Sound";
 
-  const cover = el("cover");
-  const art = t?.cover_url || DEFAULT_COVER;
-  if (cover.getAttribute("src") !== art) {
-    cover.hidden = true;
-    cover.src = art;
-  }
-
   const isLiked = Boolean(t && liked.has(t.id));
   updateLikeIcon(isLiked);
   el("like").setAttribute("aria-pressed", String(isLiked));
@@ -320,12 +401,6 @@ function render() {
   });
 }
 
-el("cover").onerror = () => {
-  const img = el("cover");
-  if (img.getAttribute("src") !== DEFAULT_COVER) img.src = DEFAULT_COVER;
-};
-el("cover").onload = () => { el("cover").hidden = false; };
-
 async function refill() {
   if (list !== "wave" || tracks.length - index > 3 || refilling) return;
   const r = revision;
@@ -348,26 +423,54 @@ async function refill() {
   }
 }
 
+// Регулярный опрос таймера воспроизведения для обновления ползунка и ауры
+let progressTicker = null;
+function startProgressTicker() {
+  if (progressTicker) return;
+  progressTicker = setInterval(() => {
+    const cur = getCurrentPlaybackTime();
+    const dur = getCurrentTotalDuration();
+    if (dur > 0) {
+      el("time").textContent = clock(cur);
+      el("time-total").textContent = clock(dur);
+      el("seek").value = (100 * cur) / dur;
+      if (cur >= dur) {
+        play(index + 1).catch(showError);
+      }
+    }
+  }, 250);
+}
+
+function stopProgressTicker() {
+  if (progressTicker) {
+    clearInterval(progressTicker);
+    progressTicker = null;
+  }
+}
+
+/* ────────────────── ВОСПРОИЗВЕДЕНИЕ ТРЕКА ────────────────── */
 async function play(i) {
-  if (!tracks[i]) return;
+  if (!tracks[i]) {
+    if (tracks.length > 0) i = 0;
+    else return;
+  }
   const id = ++song;
   const selected = tracks[i];
   index = i;
 
+  // Останавливаем все предыдущие источники
   synth.stop();
+  stopBufferSource();
   audio.pause();
+  audio.muted = true;
   render();
 
   el("status").textContent = "Студийный звук • 320 kbps";
 
-  // Разблокируем аудиоконтекст
+  // СИНХРОННАЯ разблокировка аудиоконтекста в контексте клика
   unlockAudioEngine();
 
-  let playedWithAudio = false;
-
-  // Определение источника аудио: локальный MP3 файл из webapp/assets/ гарантирует 100% работу
   let streamSrc = selected.audio_url || MP3_LOCAL_PREVIEWS[i % MP3_LOCAL_PREVIEWS.length];
-
   const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
 
   if (!isGitHubPages) {
@@ -382,37 +485,53 @@ async function play(i) {
     } catch (_) {}
   }
 
-  // Воспроизведение через HTML5 Audio (нативный вывод в динамики)
-  try {
-    audio.src = streamSrc;
-    audio.volume = 0.85;
-    audio.muted = false;
-    await visualizer.start();
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      await playPromise;
+  // 1. Попытка воспроизведения через Web Audio Buffer (гарантирует звук на iOS даже при Silent Switch!)
+  let playedSuccessfully = false;
+  const cachedBuffer = audioBufferCache.get(streamSrc);
+
+  if (cachedBuffer) {
+    playBufferSource(cachedBuffer, 0, () => play(index + 1));
+    playedSuccessfully = true;
+  } else {
+    // Если буфер еще не декодирован, мгновенно запускаем нативный <audio> без async задержек
+    try {
+      audio.src = streamSrc;
+      audio.volume = currentVolume;
+      audio.muted = false;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+      playedSuccessfully = true;
+    } catch (_) {
+      playedSuccessfully = false;
     }
-    playedWithAudio = true;
-    document.body.classList.add("playing");
-    updatePlayIcon(true);
-  } catch (err) {
-    playedWithAudio = false;
+
+    // В фоне скачиваем и декодируем Web Audio буфер для передачи на динамики и анализатор
+    loadAudioBuffer(streamSrc).then(buf => {
+      if (id !== song || !document.body.classList.contains("playing")) return;
+      if (buf) {
+        const currentPos = audio.currentTime || 0;
+        audio.pause();
+        audio.muted = true;
+        playBufferSource(buf, currentPos, () => play(index + 1));
+      }
+    });
   }
 
-  // Если HTML5 Audio заблокирован политикой браузера — мгновенно включаем синтезатор битов
-  if (!playedWithAudio) {
-    synth.ensureContext();
-    await visualizer.start(synth.ctx, synth.analyser);
+  // 2. Если оба способа заблокированы политикой браузера — мгновенно включаем синтезатор
+  if (!playedSuccessfully) {
     synth.start((currentTime, totalDuration) => {
       el("time").textContent = clock(currentTime);
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
-      el("sleeve").style.setProperty("--progress", (totalDuration ? (360 * currentTime) / totalDuration : 0) + "deg");
     });
-
-    updatePlayIcon(true);
-    document.body.classList.add("playing");
   }
+
+  document.body.classList.add("playing");
+  updatePlayIcon(true);
+  visualizer.setPlaying(true, getCurrentPlaybackTime);
+  startProgressTicker();
 
   if (!isGitHubPages) {
     api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
@@ -420,26 +539,59 @@ async function play(i) {
   refill().catch(() => {});
 }
 
-// Защита от системных ошибок воспроизведения
-audio.onerror = () => {
-  if (!synth.isPlaying) {
-    synth.ensureContext();
-    visualizer.start(synth.ctx, synth.analyser);
-    synth.start((currentTime, totalDuration) => {
-      el("time").textContent = clock(currentTime);
-      el("time-total").textContent = clock(totalDuration);
-      el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
-      el("sleeve").style.setProperty("--progress", (totalDuration ? (360 * currentTime) / totalDuration : 0) + "deg");
-    });
-    updatePlayIcon(true);
+function pausePlayback() {
+  if (isBufferPlaying) {
+    bufferPauseOffset = getCurrentPlaybackTime();
+    stopBufferSource();
   }
-};
+  if (synth.isPlaying) {
+    synth.stop();
+  }
+  if (!audio.paused) {
+    audio.pause();
+  }
+  document.body.classList.remove("playing");
+  updatePlayIcon(false);
+  visualizer.setPlaying(false);
+  stopProgressTicker();
+}
+
+function resumePlayback() {
+  unlockAudioEngine();
+  if (currentDecodedBuffer && bufferPauseOffset > 0) {
+    playBufferSource(currentDecodedBuffer, bufferPauseOffset, () => play(index + 1));
+    document.body.classList.add("playing");
+    updatePlayIcon(true);
+    visualizer.setPlaying(true, getCurrentPlaybackTime);
+    startProgressTicker();
+  } else if (audio.getAttribute("src")) {
+    audio.muted = false;
+    audio.play().then(() => {
+      document.body.classList.add("playing");
+      updatePlayIcon(true);
+      visualizer.setPlaying(true, getCurrentPlaybackTime);
+      startProgressTicker();
+    }).catch(() => play(index));
+  } else {
+    play(index).catch(showError);
+  }
+}
+
+function togglePlayPause() {
+  if (document.body.classList.contains("playing")) {
+    pausePlayback();
+  } else {
+    resumePlayback();
+  }
+}
+
+el("play").onclick = togglePlayPause;
+auraWrapper?.addEventListener("click", togglePlayPause);
 
 async function select(name) {
   const r = ++revision;
   ++song;
-  synth.stop();
-  audio.pause();
+  pausePlayback();
   audio.removeAttribute("src");
   audio.load();
 
@@ -484,71 +636,49 @@ async function select(name) {
   tracks = result;
   render();
   el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Пока нет треков.";
+
+  // Фоновая предзагрузка первых MP3 в буфер Web Audio
+  if (tracks.length > 0) {
+    const firstUrl = tracks[0].audio_url || MP3_LOCAL_PREVIEWS[0];
+    loadAudioBuffer(firstUrl).catch(() => {});
+  }
 }
 
 for (const b of document.querySelectorAll("[data-list]")) {
   b.onclick = () => select(b.dataset.list).catch(showError);
 }
 
-el("play").onclick = () => {
-  unlockAudioEngine();
-  if (synth.isPlaying) {
-    synth.stop();
-    updatePlayIcon(false);
-    document.body.classList.remove("playing");
-  } else if (!audio.paused && audio.src) {
-    audio.pause();
-    updatePlayIcon(false);
-    document.body.classList.remove("playing");
-  } else if (audio.getAttribute("src")) {
-    audio.play().then(() => {
-      updatePlayIcon(true);
-      document.body.classList.add("playing");
-    }).catch(() => play(index));
-  } else {
-    play(index).catch(showError);
-  }
-};
-
-audio.onplay = () => {
-  updatePlayIcon(true);
-  document.body.classList.add("playing");
-};
-audio.onpause = () => {
-  if (!synth.isPlaying) {
-    updatePlayIcon(false);
-    document.body.classList.remove("playing");
-  }
-};
 el("next").onclick = () => play(index + 1).catch(showError);
 el("prev").onclick = () => play(Math.max(index - 1, 0)).catch(showError);
-audio.onended = () => el("next").click();
-
-audio.ontimeupdate = () => {
-  if (synth.isPlaying) return;
-  const d = audio.duration || current()?.duration_sec || 0;
-  el("time").textContent = clock(audio.currentTime);
-  const total = el("time-total");
-  if (total) total.textContent = clock(d);
-  el("seek").value = d ? (100 * audio.currentTime) / d : 0;
-  el("sleeve").style.setProperty("--progress", (d ? (360 * audio.currentTime) / d : 0) + "deg");
-};
 
 el("seek").oninput = e => {
-  const d = audio.duration || current()?.duration_sec || 0;
-  if (d && audio.duration && !synth.isPlaying) {
-    audio.currentTime = (d * e.target.value) / 100;
+  const dur = getCurrentTotalDuration();
+  if (dur > 0) {
+    const newPos = (dur * e.target.value) / 100;
+    if (isBufferPlaying && currentDecodedBuffer) {
+      playBufferSource(currentDecodedBuffer, newPos, () => play(index + 1));
+    } else if (audio.duration && !audio.paused) {
+      audio.currentTime = newPos;
+    } else if (synth.isPlaying) {
+      synth.currentTime = newPos;
+    } else {
+      bufferPauseOffset = newPos;
+    }
+    el("time").textContent = clock(newPos);
   }
 };
 
 el("volume").oninput = e => {
-  const v = e.target.value / 100;
-  audio.volume = v;
-  audio.muted = false;
-  synth.setVolume(v);
-  el("volumeLabel").textContent = Math.round(v * 100) + "%";
+  currentVolume = e.target.value / 100;
+  audio.volume = currentVolume;
+  if (masterGain && audioCtx) {
+    masterGain.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
+  }
+  synth.setVolume(currentVolume);
+  el("volumeLabel").textContent = Math.round(currentVolume * 100) + "%";
 };
-audio.volume = 0.85;
+currentVolume = 1.0;
+audio.volume = 1.0;
 
 el("shuffle").onclick = () => {
   shuffleUpcoming(tracks, index);
@@ -564,8 +694,7 @@ async function doSearch() {
 
   const r = ++revision;
   ++song;
-  synth.stop();
-  audio.pause();
+  pausePlayback();
   audio.removeAttribute("src");
   audio.load();
 
@@ -648,8 +777,7 @@ el("like").onclick = async () => {
       tracks = tracks.filter(track => track.id !== t.id);
       if (playing === t.id) {
         ++song;
-        synth.stop();
-        audio.pause();
+        pausePlayback();
         audio.removeAttribute("src");
         audio.load();
         index = Math.max(0, Math.min(index, tracks.length - 1));
@@ -668,14 +796,6 @@ el("like").onclick = async () => {
 
 el("dl-current-btn").onclick = () => {
   downloadInTelegram(current());
-};
-
-// Жесты свайпа для смены трека
-let startX;
-sleeve.ontouchstart = e => (startX = e.changedTouches[0].clientX);
-sleeve.ontouchend = e => {
-  const dx = e.changedTouches[0].clientX - startX;
-  if (Math.abs(dx) > 50) el(dx < 0 ? "next" : "prev").click();
 };
 
 async function init() {
