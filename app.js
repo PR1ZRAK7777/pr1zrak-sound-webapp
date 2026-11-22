@@ -15,9 +15,10 @@ async function api(path, options={}) {
 function showError(e){el("status").textContent=e.message;}
 function render(){
   const t=current();
+  el("like").disabled=!t;
   el("title").textContent=t?.title || "Моя Волна"; el("artist").textContent=t?.artist || "";
   const cover=el("cover");
-  if(cover.getAttribute("src")!==t?.cover_url){cover.hidden=true;cover.removeAttribute("src");if(t?.cover_url)cover.src=t.cover_url;}
+  if((cover.getAttribute("src") || "")!==(t?.cover_url || "")){cover.hidden=true;cover.removeAttribute("src");if(t?.cover_url)cover.src=t.cover_url;}
   el("like").textContent=liked.has(t?.id)?"♥":"♡";
   el("like").setAttribute("aria-pressed",String(liked.has(t?.id)));
   el("queue").replaceChildren(...tracks.map((t,i)=>{
@@ -36,15 +37,15 @@ async function refill(){
 }
 async function play(i){
   if(!tracks[i])return;
-  const id=++song;index=i;audio.pause();render();el("status").textContent="Загрузка…";
+  const id=++song, selected=tracks[i];index=i;audio.pause();render();el("status").textContent="Загрузка…";
   await visualize();
-  const blob=await (await api("audio/"+tracks[i].id)).blob();
+  const blob=await (await api("audio/"+selected.id)).blob();
   if(id!==song)return;
   if(objectURL)URL.revokeObjectURL(objectURL);
   audio.src=objectURL=URL.createObjectURL(blob);
   await audio.play();if(id!==song)return;
   el("status").textContent="";
-  await api("listen",{method:"POST",body:JSON.stringify({id:current().id})});await refill();
+  await api("listen",{method:"POST",body:JSON.stringify({id:selected.id})});await refill();
 }
 async function select(name){
   const r=++revision;++song;audio.pause();audio.removeAttribute("src");audio.load();
@@ -65,8 +66,16 @@ el("volume").oninput=e=>{const v=audio.volume=e.target.value/100;el("volumeLabel
 audio.volume=.85;
 el("shuffle").onclick=()=>{for(let i=tracks.length-1;i>index+1;i--){const j=index+1+Math.floor(Math.random()*(i-index));[tracks[i],tracks[j]]=[tracks[j],tracks[i]];}render();};
 el("like").onclick=async()=>{const t=current();if(!t)return;el("like").disabled=true;
-  try{const was=liked.has(t.id);await api("like",{method:was?"DELETE":"POST",body:JSON.stringify({id:t.id})});if(was)liked.delete(t.id);else liked.add(t.id);render();}
-  catch(e){showError(e);}finally{el("like").disabled=false;}
+  try{const was=liked.has(t.id);await api("like",{method:was?"DELETE":"POST",body:JSON.stringify({id:t.id})});if(was)liked.delete(t.id);else liked.add(t.id);
+    if(was && list==="favorites"){
+      const playing=current()?.id;
+      tracks=tracks.filter(track=>track.id!==t.id);
+      if(playing===t.id){++song;audio.pause();audio.removeAttribute("src");audio.load();index=Math.max(0,Math.min(index,tracks.length-1));}
+      else index=tracks.findIndex(track=>track.id===playing);
+      if(!tracks.length)el("status").textContent="В избранном пока нет треков.";
+    }
+    render();}
+  catch(e){showError(e);}finally{el("like").disabled=!current();}
 };
 let startX;el("sleeve").ontouchstart=e=>startX=e.changedTouches[0].clientX;
 el("sleeve").ontouchend=e=>{const dx=e.changedTouches[0].clientX-startX;if(Math.abs(dx)>50)el(dx<0?"next":"prev").click();};
