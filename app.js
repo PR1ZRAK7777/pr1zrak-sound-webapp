@@ -1,5 +1,5 @@
 import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=9";
-import {makeVisualizer} from "./visualizer.js?v=9";
+import {makeVisualizer} from "./visualizer.js?v=14";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -816,9 +816,7 @@ async function play(i) {
 
   if (!playedSuccessfully) {
     stopCurrentAudio();
-    el("status").textContent = SEARCH_RELEASES.includes(selected)
-      ? "Полная запись пока недоступна в плеере."
-      : "Не удалось воспроизвести трек.";
+    el("status").textContent = "Не удалось воспроизвести трек.";
     return;
   }
 
@@ -1176,27 +1174,62 @@ async function doSearch() {
   const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
 
   if (!isGitHubPages) {
-    const res = await api("search?q=" + encodeURIComponent(query));
-    if (res && res.ok) {
-      resTracks = await res.json();
+    try {
+      const res = await api("search?q=" + encodeURIComponent(query));
+      if (res && res.ok) {
+        resTracks = await res.json();
+      }
+    } catch (_) {}
+  }
+
+  if (r !== revision || sessionId !== currentSessionId) return;
+
+  // 1. Поиск по локальным студийным трекам и спец-релизам
+  const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const localMatches = [...SEARCH_RELEASES, ...SEED_CATALOG].filter(t => {
+    const haystack = [t.artist, t.title, ...(t.aliases || [])].join(" ").toLowerCase();
+    const catalogWords = haystack.match(/[\p{L}\p{N}]+/gu) || [];
+    return words.length > 0 && words.every(term =>
+      catalogWords.some(word => word === term || (term.length >= 3 && word.startsWith(term)))
+    );
+  });
+
+  // 2. Глобальный поиск музыки по всему миру (любая песня) через открытый Music API с CORS
+  let globalTracks = [];
+  try {
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=30`;
+    const itRes = await fetch(itunesUrl);
+    if (itRes.ok) {
+      const itData = await itRes.json();
+      if (itData && itData.results && itData.results.length) {
+        globalTracks = itData.results
+          .filter(r => r.previewUrl)
+          .map(r => ({
+            id: "global-" + r.trackId,
+            artist: r.artistName || "Артист",
+            title: r.trackName || query,
+            duration_sec: Math.round((r.trackTimeMillis || 30000) / 1000),
+            cover_url: (r.artworkUrl100 || "").replace("100x100bb", "600x600bb") || DEFAULT_COVER,
+            audio_url: r.previewUrl
+          }));
+      }
+    }
+  } catch (_) {}
+
+  if (r !== revision || sessionId !== currentSessionId) return;
+
+  // Объединяем: локальные студийные треки с наивысшим приоритетом + все результаты глобального поиска
+  const seen = new Set();
+  const merged = [];
+  for (const t of [...(resTracks || []), ...localMatches, ...globalTracks]) {
+    const key = (String(t.artist || "") + " - " + String(t.title || "")).trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      merged.push(t);
     }
   }
 
-  if (r !== revision || sessionId !== currentSessionId) return;
-
-  if (!resTracks || !resTracks.length) {
-    const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
-    resTracks = [...SEARCH_RELEASES, ...SEED_CATALOG].filter(t => {
-      const haystack = [t.artist, t.title, ...(t.aliases || [])].join(" ").toLowerCase();
-      const catalogWords = haystack.match(/[\p{L}\p{N}]+/gu) || [];
-      return words.length > 0 && words.every(term =>
-        catalogWords.some(word => word === term || (term.length >= 3 && word.startsWith(term)))
-      );
-    });
-  }
-
-  if (r !== revision || sessionId !== currentSessionId) return;
-  tracks = resTracks;
+  tracks = merged;
   render();
   el("status").textContent = tracks.length ? "" : "В каталоге плеера ничего не найдено.";
   const lt = el("list-title");
