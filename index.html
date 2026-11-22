@@ -1,28 +1,66 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PR1ZRAK Sound — Моя Волна</title>
-<link rel="stylesheet" href="/webapp/style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head>
-<body><main>
-<header class="app-header">
-  <div class="search-bar">
-    <input id="search-input" type="search" placeholder="🔍 Найти трек или артиста..." autocomplete="off">
-    <button id="search-btn">Искать</button>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>ПРИЗРАК — Скачать трек</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<main>
+  <header class="app-header">
+    <div class="search-bar">
+      <input id="search-input" type="search" placeholder="🔍 Найти трек или артиста..." autocomplete="off">
+      <button id="search-btn">Искать</button>
+    </div>
+    <nav aria-label="Плейлисты">
+      <button data-list="wave" aria-pressed="true">🌊 Волна</button>
+      <button data-list="favorites">💜 Мои треки</button>
+      <button data-list="top">🔥 Топ</button>
+      <button data-list="search" id="tab-search" style="display:none">🔍 Поиск</button>
+    </nav>
+    <div class="top-volume">
+      <span id="volumeLabel">🔊 85%</span>
+      <input id="volume" type="range" min="0" max="100" value="85" aria-label="Громкость">
+    </div>
+  </header>
+
+  <section class="art">
+    <div id="sleeve">
+      <img id="cover" alt="" hidden>
+    </div>
+  </section>
+  <canvas id="spectrum" width="384" height="52" aria-hidden="true"></canvas>
+
+  <h1 id="title">Загрузка музыки…</h1>
+  <p id="artist">ПРИЗРАК</p>
+  <p id="status" role="status"></p>
+  <audio id="audio" preload="auto"></audio>
+
+  <div class="seek-container">
+    <div class="time-row">
+      <output id="time">0:00</output>
+      <output id="time-total">0:00</output>
+    </div>
+    <input id="seek" type="range" min="0" max="100" value="0" aria-label="Позиция">
   </div>
-  <nav aria-label="Плейлисты">
-    <button data-list="wave" aria-pressed="true">🌊 Волна</button>
-    <button data-list="favorites">💜 Мои треки</button>
-    <button data-list="top">🔥 Топ</button>
-    <button data-list="search" id="tab-search" style="display:none">🔍 Поиск</button>
-  </nav>
-  <div class="top-volume">
-    <span id="volumeLabel">🔊 85%</span>
-    <input id="volume" type="range" min="0" max="100" value="85" aria-label="Громкость">
+
+  <div class="controls">
+    <button id="prev" aria-label="Предыдущий">⏮</button>
+    <button id="play" aria-label="Воспроизвести">▶</button>
+    <button id="next" aria-label="Следующий">⏭</button>
+    <button id="shuffle" aria-label="Перемешать">⤨</button>
+    <button id="like" aria-label="В избранное">♡</button>
   </div>
-</header>
-<section class="art"><div id="sleeve"><img id="cover" alt="" hidden></div></section><canvas id="spectrum" width="384" height="52" aria-hidden="true"></canvas>
-<h1 id="title">Моя Волна</h1><p id="artist">PR1ZRAK Music</p><p id="status" role="status"></p><audio id="audio"></audio>
-<div class="seek-container">
-  <div class="time-row"><output id="time">0:00</output><output id="time-total">0:00</output></div>
-  <input id="seek" type="range" min="0" max="100" value="0" aria-label="Позиция">
-</div>
-<div class="controls"><button id="prev" aria-label="Предыдущий">⏮</button><button id="play" aria-label="Воспроизвести">▶</button><button id="next" aria-label="Следующий">⏭</button><button id="shuffle" aria-label="Перемешать">⤨</button><button id="like" aria-label="В избранное">♡</button></div>
-<h2 id="list-title">Очередь</h2><ol id="queue"></ol></main><script type="module" src="/webapp/app.js"></script></body></html>
+
+  <div class="dl-container">
+    <button id="dl-current-btn" class="dl-btn" aria-label="Скачать текущий трек">⚡️ Скачать в Telegram (320 kbps)</button>
+  </div>
+
+  <h2 id="list-title">Очередь воспроизведения</h2>
+  <ol id="queue"></ol>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
