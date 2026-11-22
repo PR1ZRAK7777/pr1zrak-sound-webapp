@@ -1,3 +1,4 @@
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js";
 import {makeVisualizer} from "./visualizer.js";
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -34,7 +35,7 @@ async function refill(){
   if(list!=="wave" || tracks.length-index>3 || refilling)return;
   const r=revision;refilling=true;
   try{const extra=await (await api("wave/"+uid+"?limit=5")).json();
-    if(r===revision){tracks.push(...extra);render();}
+    if(r===revision){appendWaveBatch(tracks,index,extra);render();}
   }finally{if(r===revision)refilling=false;}
 }
 async function play(i){
@@ -47,7 +48,7 @@ async function play(i){
   audio.src=objectURL=URL.createObjectURL(blob);
   await audio.play();if(id!==song)return;
   el("status").textContent="";
-  await api("listen",{method:"POST",body:JSON.stringify({id:selected.id})});await refill();
+  await Promise.all([api("listen",{method:"POST",body:JSON.stringify({id:selected.id})}), refill()]);
 }
 async function select(name){
   const r=++revision;++song;audio.pause();audio.removeAttribute("src");audio.load();
@@ -66,7 +67,7 @@ audio.ontimeupdate=()=>{const d=audio.duration || 0;el("time").textContent=clock
 el("seek").oninput=e=>{if(audio.duration)audio.currentTime=audio.duration*e.target.value/100;};
 el("volume").oninput=e=>{const v=audio.volume=e.target.value/100;el("volumeLabel").textContent=(v===0?"🔇":v<.34?"🔈":v<.67?"🔉":"🔊")+" "+Math.round(v*100)+"%";};
 audio.volume=.85;
-el("shuffle").onclick=()=>{for(let i=tracks.length-1;i>index+1;i--){const j=index+1+Math.floor(Math.random()*(i-index));[tracks[i],tracks[j]]=[tracks[j],tracks[i]];}render();};
+el("shuffle").onclick=()=>{shuffleUpcoming(tracks,index);render();};
 el("like").onclick=async()=>{const t=current();if(!t)return;el("like").disabled=true;
   try{const was=liked.has(t.id);await api("like",{method:was?"DELETE":"POST",body:JSON.stringify({id:t.id})});if(was)liked.delete(t.id);else liked.add(t.id);
     if(was && list==="favorites"){
