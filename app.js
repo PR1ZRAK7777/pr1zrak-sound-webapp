@@ -53,7 +53,11 @@ async function play(i){
 async function select(name){
   const r=++revision;++song;audio.pause();audio.removeAttribute("src");audio.load();
   tracks=[];index=0;list=name;refilling=false;render();
+  const tabSearch = el("tab-search");
+  if (name !== "search" && tabSearch) tabSearch.style.display = "none";
   for(const b of document.querySelectorAll("[data-list]"))b.setAttribute("aria-pressed",String(b.dataset.list===name));
+  const lt = el("list-title");
+  if (lt) lt.textContent = name === "favorites" ? "Мои сохранённые треки" : name === "top" ? "🔥 Топ хитов" : "Очередь воспроизведения";
   const result=await (await api(name==="top"?"top":name+"/"+uid)).json();
   if(r!==revision)return;tracks=result;render();el("status").textContent=tracks.length?"":"Пока нет треков.";
 }
@@ -63,11 +67,45 @@ audio.onplay=()=>{el("play").textContent="Ⅱ";el("play").ariaLabel="Пауза"
 audio.onpause=()=>{el("play").textContent="▶";el("play").ariaLabel="Воспроизвести";};
 el("next").onclick=()=>play(index+1).catch(showError);el("prev").onclick=()=>play(Math.max(index-1,0)).catch(showError);
 audio.onended=()=>el("next").click();
-audio.ontimeupdate=()=>{const d=audio.duration || 0;el("time").textContent=clock(audio.currentTime)+" / "+clock(d);el("seek").value=d?100*audio.currentTime/d:0;el("sleeve").style.setProperty("--progress",(d?360*audio.currentTime/d:0)+"deg");};
+audio.ontimeupdate=()=>{
+  const d=audio.duration || 0;
+  el("time").textContent=clock(audio.currentTime);
+  const total=el("time-total");
+  if(total) total.textContent=clock(d);
+  el("seek").value=d?100*audio.currentTime/d:0;
+  el("sleeve").style.setProperty("--progress",(d?360*audio.currentTime/d:0)+"deg");
+};
 el("seek").oninput=e=>{if(audio.duration)audio.currentTime=audio.duration*e.target.value/100;};
 el("volume").oninput=e=>{const v=audio.volume=e.target.value/100;el("volumeLabel").textContent=(v===0?"🔇":v<.34?"🔈":v<.67?"🔉":"🔊")+" "+Math.round(v*100)+"%";};
 audio.volume=.85;
 el("shuffle").onclick=()=>{shuffleUpcoming(tracks,index);render();};
+const searchInput = el("search-input");
+const searchBtn = el("search-btn");
+async function doSearch() {
+  const query = (searchInput?.value || "").trim();
+  if (!query) return;
+  const r = ++revision; ++song; audio.pause(); audio.removeAttribute("src"); audio.load();
+  tracks = []; index = 0; list = "search"; refilling = false; render();
+  el("status").textContent = "Ищу треки…";
+  const tabSearch = el("tab-search");
+  if (tabSearch) { tabSearch.style.display = ""; tabSearch.setAttribute("aria-pressed", "true"); }
+  for (const b of document.querySelectorAll("[data-list]")) {
+    if (b !== tabSearch) b.setAttribute("aria-pressed", "false");
+  }
+  try {
+    const res = await (await api("search?q=" + encodeURIComponent(query))).json();
+    if (r !== revision) return;
+    tracks = res;
+    render();
+    el("status").textContent = tracks.length ? "" : "Ничего не найдено.";
+    const lt = el("list-title");
+    if (lt) lt.textContent = `Результаты поиска (${tracks.length})`;
+  } catch (err) {
+    showError(err);
+  }
+}
+searchBtn?.addEventListener("click", doSearch);
+searchInput?.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 el("like").onclick=async()=>{const t=current();if(!t)return;el("like").disabled=true;
   try{const was=liked.has(t.id);await api("like",{method:was?"DELETE":"POST",body:JSON.stringify({id:t.id})});if(was)liked.delete(t.id);else liked.add(t.id);
     if(was && list==="favorites"){
