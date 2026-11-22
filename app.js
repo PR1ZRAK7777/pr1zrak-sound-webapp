@@ -1,5 +1,5 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=7";
-import {makeVisualizer} from "./visualizer.js?v=7";
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=8";
+import {makeVisualizer} from "./visualizer.js?v=8";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -12,7 +12,7 @@ const visualizer = makeVisualizer(auraCanvas);
 const getAssetUrl = path => new URL(path, import.meta.url).href;
 const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
 
-// Локальные проверенные MP3 файлы (абсолютные URL, гарантирующие работу на GitHub Pages)
+// Локальные проверенные MP3 файлы (полные студийные треки > 60с)
 const MP3_LOCAL_PREVIEWS = [
   getAssetUrl("assets/track_femlove_1000_7.mp3"),
   getAssetUrl("assets/track_shadowraze_showdown.mp3"),
@@ -28,14 +28,14 @@ const MP3_LOCAL_PREVIEWS = [
   getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
 ];
 
-// Каталог популярных треков: реальное аудио для каждого трека 1-к-1 + поисковые теги
+// Каталог популярных треков: реальное аудио 1-к-1 с точной реальной длительностью
 const SEED_CATALOG = [
   {
     id: 101,
     artist: "fem.love",
     title: "1000-7",
     aliases: ["1000 7", "1000-7", "семь", "тысяча", "fem love", "фем лав", "дед инсайд", "dead inside", "гуль", "zxcursed"],
-    duration_sec: 45,
+    duration_sec: 117,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_femlove_1000_7.mp3")
   },
@@ -44,7 +44,7 @@ const SEED_CATALOG = [
     artist: "Shadowraze",
     title: "showdown",
     aliases: ["shadowraze", "showdown", "шадоурейз", "шоудаун", "шадоурейс", "дота", "dota", "рейз"],
-    duration_sec: 45,
+    duration_sec: 120,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_shadowraze_showdown.mp3")
   },
@@ -53,7 +53,7 @@ const SEED_CATALOG = [
     artist: "Miyagi & Andy Panda",
     title: "Minor",
     aliases: ["miyagi", "andy panda", "minor", "мияги", "энди панда", "минор", "hajime"],
-    duration_sec: 45,
+    duration_sec: 182,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_miyagi_minor.mp3")
   },
@@ -62,7 +62,7 @@ const SEED_CATALOG = [
     artist: "MACAN",
     title: "Юг",
     aliases: ["macan", "юг", "макан", "yug", "на юг"],
-    duration_sec: 45,
+    duration_sec: 178,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_macan_yug.mp3")
   },
@@ -71,7 +71,7 @@ const SEED_CATALOG = [
     artist: "Linkin Park",
     title: "Numb",
     aliases: ["linkin park", "numb", "линкин парк", "намб", "честер", "chester", "рок", "rock"],
-    duration_sec: 45,
+    duration_sec: 188,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_linkinpark_numb.mp3")
   },
@@ -80,7 +80,7 @@ const SEED_CATALOG = [
     artist: "Big Baby Tape & Kizaru",
     title: "99 Problems",
     aliases: ["big baby tape", "kizaru", "99 problems", "тэйп", "кизару", "99 проблем", "бандана", "bandana"],
-    duration_sec: 45,
+    duration_sec: 159,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_tape_kizaru_99problems.mp3")
   },
@@ -89,7 +89,7 @@ const SEED_CATALOG = [
     artist: "Macan",
     title: "ASPHALT 8",
     aliases: ["macan", "asphalt 8", "асфальт 8", "асфальт", "макан"],
-    duration_sec: 45,
+    duration_sec: 125,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_macan_asphalt8.mp3")
   },
@@ -98,7 +98,7 @@ const SEED_CATALOG = [
     artist: "LXST CXNTURY",
     title: "ODIUM",
     aliases: ["lxst cxntury", "odium", "лост сенчури", "одиум", "фонк", "phonk"],
-    duration_sec: 45,
+    duration_sec: 167,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_lxstcxntury_odium.mp3")
   },
@@ -107,7 +107,7 @@ const SEED_CATALOG = [
     artist: "DVRST",
     title: "Close Eyes",
     aliases: ["dvrst", "close eyes", "дврст", "клоуз айс", "фонк", "phonk"],
-    duration_sec: 45,
+    duration_sec: 132,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_dvrst_close_eyes.mp3")
   },
@@ -116,7 +116,7 @@ const SEED_CATALOG = [
     artist: "Скриптонит",
     title: "Положение",
     aliases: ["скриптонит", "положение", "scriptonite", "polozhenie", "скрип"],
-    duration_sec: 45,
+    duration_sec: 283,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_scriptonite_polozhenie.mp3")
   },
@@ -125,7 +125,7 @@ const SEED_CATALOG = [
     artist: "OG Buda",
     title: "Бандит",
     aliases: ["og buda", "бандит", "ог буда", "буда", "bandit"],
-    duration_sec: 45,
+    duration_sec: 225,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_ogbuda_bandit.mp3")
   },
@@ -134,7 +134,7 @@ const SEED_CATALOG = [
     artist: "PHARAOH",
     title: "Black Siemens",
     aliases: ["pharaoh", "black siemens", "фараон", "блэк сименс", "скр скр", "сименс"],
-    duration_sec: 45,
+    duration_sec: 195,
     cover_url: DEFAULT_COVER,
     audio_url: getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
   },
@@ -486,7 +486,7 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
     }
     // Автопереход на следующий трек ТОЛЬКО если это была текущая сессия
     if (sessionId === currentSessionId && wasPlaying) {
-      play(index + 1).catch(showError);
+      handleTrackEnd();
     }
   };
 
@@ -505,6 +505,9 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
 
 /* ────────────────── СОСТОЯНИЕ ПЛЕЕРА И КАТАЛОГА ────────────────── */
 let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, objectURL = null, refilling = false;
+let repeatMode = "off"; // "off" | "all" | "one"
+let isShuffle = false;
+const recentPlayed = new Set();
 
 const current = () => tracks[index];
 const clock = s => {
@@ -532,7 +535,7 @@ function getCurrentTotalDuration() {
   if (audio.duration && !isNaN(audio.duration)) {
     return audio.duration;
   }
-  return current()?.duration_sec || 35;
+  return current()?.duration_sec || 180;
 }
 
 async function api(path, options = {}) {
@@ -590,6 +593,38 @@ function updateLikeIcon(isLiked) {
   }
 }
 
+function updateRepeatIcon(mode) {
+  const icon = el("repeat-icon");
+  const btn = el("repeat");
+  if (!icon || !btn) return;
+
+  btn.setAttribute("data-mode", mode);
+
+  if (mode === "off") {
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("aria-label", "Повтор выключен");
+    btn.setAttribute("title", "Режим повтора: выкл");
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
+  } else if (mode === "all") {
+    btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("aria-label", "Повтор всего списка");
+    btn.setAttribute("title", "Режим повтора: весь список");
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
+  } else if (mode === "one") {
+    btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("aria-label", "Повтор текущего трека");
+    btn.setAttribute("title", "Режим повтора: один трек (1)");
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="15.5" font-size="8.5" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-weight="900" text-anchor="middle" fill="currentColor" stroke="none">1</text></svg>`;
+  }
+}
+
+function updateShuffleIcon(active) {
+  const btn = el("shuffle");
+  if (!btn) return;
+  btn.setAttribute("aria-pressed", String(active));
+  btn.setAttribute("title", active ? "Случайный порядок включен" : "Перемешать треки");
+}
+
 function render() {
   const t = current();
   el("like").disabled = !t;
@@ -599,6 +634,9 @@ function render() {
   const isLiked = Boolean(t && liked.has(t.id));
   updateLikeIcon(isLiked);
   el("like").setAttribute("aria-pressed", String(isLiked));
+
+  updateRepeatIcon(repeatMode);
+  updateShuffleIcon(isShuffle);
 
   const queueEl = el("queue");
   queueEl.innerHTML = "";
@@ -619,11 +657,18 @@ function render() {
   tracks.forEach((track, i) => {
     const li = document.createElement("li");
     li.className = "track-row" + (i === index ? " active" : "");
+    li.setAttribute("role", "button");
+    li.setAttribute("tabindex", "0");
+    li.title = `Воспроизвести ${track.artist} — ${track.title}`;
 
     const btnPlay = document.createElement("button");
     btnPlay.className = "track-info-btn";
     btnPlay.textContent = (i === index ? "• " : "") + `${track.artist} — ${track.title}`;
-    btnPlay.onclick = () => play(i).catch(showError);
+    btnPlay.setAttribute("aria-label", `Воспроизвести ${track.artist} — ${track.title}`);
+
+    const trackDur = document.createElement("span");
+    trackDur.className = "track-duration-text";
+    trackDur.textContent = clock(track.duration_sec);
 
     const btnDl = document.createElement("button");
     btnDl.className = "track-dl-icon";
@@ -634,7 +679,20 @@ function render() {
       downloadInTelegram(track);
     };
 
-    li.append(btnPlay, btnDl);
+    li.append(btnPlay, trackDur, btnDl);
+
+    // Клик по любому месту строки трека мгновенно запускает воспроизведение
+    li.onclick = (e) => {
+      if (e.target.closest(".track-dl-icon")) return;
+      play(i).catch(showError);
+    };
+    li.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        play(i).catch(showError);
+      }
+    };
+
     queueEl.append(li);
   });
 }
@@ -648,19 +706,28 @@ async function refill() {
     if (res) {
       const extra = await res.json();
       if (r === revision) {
-        appendWaveBatch(tracks, index, extra);
+        appendWaveBatch(tracks, index, extra, recentPlayed);
+        if (isShuffle) shuffleUpcoming(tracks, index);
         render();
       }
     } else {
-      let candidates = [...SEED_CATALOG];
+      const currentId = current()?.id;
+      const upcomingIds = new Set(tracks.slice(index + 1).map(t => t.id));
+      const pool = SEED_CATALOG.filter(t => t.id !== currentId && !upcomingIds.has(t.id));
+
+      const unplayed = pool.filter(t => !recentPlayed.has(t.id));
+      const pickPool = unplayed.length >= 3 ? unplayed : pool;
+
+      let candidates;
       if (liked.size > 0) {
-        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id));
-        const remaining = SEED_CATALOG.filter(t => !liked.has(t.id)).sort(() => Math.random() - 0.5);
+        const likedTracks = pickPool.filter(t => liked.has(t.id));
+        const remaining = pickPool.filter(t => !liked.has(t.id)).sort(() => Math.random() - 0.5);
         candidates = [...likedTracks, ...remaining];
       } else {
-        candidates.sort(() => Math.random() - 0.5);
+        candidates = [...pickPool].sort(() => Math.random() - 0.5);
       }
-      appendWaveBatch(tracks, index, candidates.slice(0, 5));
+      appendWaveBatch(tracks, index, candidates.slice(0, 5), recentPlayed);
+      if (isShuffle) shuffleUpcoming(tracks, index);
       render();
     }
   } finally {
@@ -756,7 +823,7 @@ async function play(i) {
     try {
       audio.onended = () => {
         if (sessionId === currentSessionId) {
-          play(index + 1).catch(showError);
+          handleTrackEnd();
         }
       };
       audio.src = streamSrc;
@@ -796,7 +863,7 @@ async function play(i) {
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
       if (currentTime >= totalDuration) {
-        play(index + 1).catch(showError);
+        handleTrackEnd();
       }
     });
   }
@@ -805,6 +872,15 @@ async function play(i) {
   updatePlayIcon(true);
   visualizer.setPlaying(true, getCurrentPlaybackTime);
   startProgressTicker(sessionId);
+
+  // Анти-повтор: фиксация недавних треков
+  if (selected && selected.id) {
+    recentPlayed.add(selected.id);
+    if (recentPlayed.size > 25) {
+      const oldest = recentPlayed.values().next().value;
+      recentPlayed.delete(oldest);
+    }
+  }
 
   // Запись в историю прослушиваний для персонализации Волны
   try {
@@ -821,6 +897,31 @@ async function play(i) {
     api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
   }
   refill().catch(() => {});
+}
+
+function handleTrackEnd() {
+  if (repeatMode === "one") {
+    // Зацикливание текущего трека на повтор с 0:00 при завершении
+    play(index).catch(showError);
+  } else if (index + 1 < tracks.length) {
+    play(index + 1).catch(showError);
+  } else if (repeatMode === "all") {
+    // Повтор всего списка по кругу
+    play(0).catch(showError);
+  } else if (list === "wave") {
+    refill().then(() => {
+      if (index + 1 < tracks.length) {
+        play(index + 1).catch(showError);
+      } else {
+        pausePlayback();
+      }
+    }).catch(() => pausePlayback());
+  } else {
+    // Окончание списка воспроизведения
+    pausePlayback();
+    el("seek").value = 0;
+    el("time").textContent = "0:00";
+  }
 }
 
 function pausePlayback() {
@@ -844,7 +945,7 @@ function resumePlayback() {
   } else if (audio.getAttribute("src")) {
     audio.onended = () => {
       if (sessionId === currentSessionId) {
-        play(index + 1).catch(showError);
+        handleTrackEnd();
       }
     };
     audio.muted = false;
@@ -923,19 +1024,30 @@ async function select(name) {
         if (hist) historyIds = JSON.parse(hist);
       } catch (_) {}
 
+      let pool = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
       if (liked.size > 0 || historyIds.length > 0) {
         const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id));
         const historyTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && historyIds.includes(t.id));
         const otherTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && !historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
-        result = [...likedTracks, ...historyTracks, ...otherTracks];
-      } else {
-        result = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
+        pool = [...likedTracks, ...historyTracks, ...otherTracks];
+      }
+      // Устраняем дубликаты треков в очереди
+      const seen = new Set();
+      result = [];
+      for (const t of pool) {
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          result.push(t);
+        }
       }
     }
   }
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
+  if (isShuffle && tracks.length > 1) {
+    shuffleUpcoming(tracks, 0);
+  }
   render();
 
   if (name === "favorites" && tracks.length === 0) {
@@ -957,13 +1069,67 @@ for (const b of document.querySelectorAll("[data-list]")) {
 
 el("next").onclick = () => {
   if (!tracks.length) return;
-  play(index + 1).catch(showError);
+  if (index + 1 < tracks.length) {
+    play(index + 1).catch(showError);
+  } else if (repeatMode === "all") {
+    play(0).catch(showError);
+  } else if (list === "wave") {
+    refill().then(() => {
+      if (index + 1 < tracks.length) {
+        play(index + 1).catch(showError);
+      }
+    }).catch(showError);
+  }
 };
 
 el("prev").onclick = () => {
   if (!tracks.length) return;
-  play(index > 0 ? index - 1 : 0).catch(showError);
+  const curTime = getCurrentPlaybackTime();
+  if (curTime > 3) {
+    if (isBufferPlaying && currentDecodedBuffer) {
+      playBufferSource(currentDecodedBuffer, 0, currentSessionId);
+    } else if (audio.duration && !audio.paused) {
+      audio.currentTime = 0;
+    } else if (synth.isPlaying) {
+      synth.currentTime = 0;
+    } else {
+      bufferPauseOffset = 0;
+    }
+    el("time").textContent = "0:00";
+    el("seek").value = 0;
+    return;
+  }
+  if (index > 0) {
+    play(index - 1).catch(showError);
+  } else if (repeatMode === "all") {
+    play(tracks.length - 1).catch(showError);
+  } else {
+    play(0).catch(showError);
+  }
 };
+
+el("shuffle").onclick = () => {
+  isShuffle = !isShuffle;
+  updateShuffleIcon(isShuffle);
+  if (isShuffle) {
+    shuffleUpcoming(tracks, index);
+    render();
+  }
+};
+
+const repeatBtn = el("repeat");
+if (repeatBtn) {
+  repeatBtn.onclick = () => {
+    if (repeatMode === "off") {
+      repeatMode = "all";
+    } else if (repeatMode === "all") {
+      repeatMode = "one";
+    } else {
+      repeatMode = "off";
+    }
+    updateRepeatIcon(repeatMode);
+  };
+}
 
 el("seek").oninput = e => {
   const dur = getCurrentTotalDuration();
@@ -994,10 +1160,6 @@ el("volume").oninput = e => {
 currentVolume = 1.0;
 audio.volume = 1.0;
 
-el("shuffle").onclick = () => {
-  shuffleUpcoming(tracks, index);
-  render();
-};
 
 const searchInput = el("search-input");
 const searchBtn = el("search-btn");

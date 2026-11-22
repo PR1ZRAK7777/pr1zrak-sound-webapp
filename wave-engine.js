@@ -1,16 +1,40 @@
-/** Keep songs already waiting in their original order, including on a slow refill. */
-export function appendWaveBatch(queue, index, batch) {
-  const pending = new Set(queue.slice(index + 1).map(track => track.id));
-  const additions = [];
+/**
+ * Append wave tracks to queue without duplicates and avoiding recent repetitions.
+ * @param {Array} queue - Current track queue
+ * @param {number} index - Current playing index
+ * @param {Array} batch - Candidate tracks to append
+ * @param {Set|Array} [recentPlayed] - Set of track IDs recently played
+ */
+export function appendWaveBatch(queue, index, batch, recentPlayed = new Set()) {
+  const recentSet = recentPlayed instanceof Set ? recentPlayed : new Set(recentPlayed || []);
+  const upcomingIds = new Set(queue.slice(index + 1).map(track => track.id));
+  const currentId = queue[index]?.id;
+
+  const freshAdditions = [];
+  const recentAdditions = [];
+
   for (const track of batch) {
-    if (!pending.has(track.id)) {
-      pending.add(track.id);
-      additions.push(track);
+    if (!track || !track.id) continue;
+    if (upcomingIds.has(track.id)) continue;
+    if (track.id === currentId) continue;
+
+    upcomingIds.add(track.id);
+    if (recentSet.has(track.id)) {
+      recentAdditions.push(track);
+    } else {
+      freshAdditions.push(track);
     }
   }
-  // At a catalog boundary prefer another recording before repeating the current one.
-  const currentId = queue[index]?.id;
-  additions.sort((a, b) => Number(a.id === currentId) - Number(b.id === currentId));
+
+  // Prioritize completely fresh tracks over recently played ones
+  const additions = [...freshAdditions, ...recentAdditions];
+
+  // If additions are empty and upcoming queue is empty, pick a candidate that is not currently playing
+  if (additions.length === 0 && batch.length > 0 && queue.slice(index + 1).length === 0) {
+    const fallback = batch.find(t => t && t.id && t.id !== currentId);
+    if (fallback) additions.push(fallback);
+  }
+
   queue.push(...additions);
 }
 
