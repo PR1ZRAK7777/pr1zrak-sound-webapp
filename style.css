@@ -1,17 +1,17 @@
 :root {
   color-scheme: dark;
   --bg-color: #000000;
-  --panel-bg: rgba(10, 10, 12, 0.85);
-  --panel-border: rgba(255, 255, 255, 0.09);
+  --panel-bg: rgba(14, 14, 18, 0.82);
+  --panel-border: rgba(255, 255, 255, 0.18);
   --text-primary: #ffffff;
-  --text-secondary: #94949e;
-  --text-tertiary: #5f5f69;
+  --text-secondary: #9da3af;
+  --text-tertiary: #5d6370;
 
-  /* Динамические цвета ауры */
-  --aura-hue: 275deg;
-  --aura-primary: hsl(var(--aura-hue), 92%, 62%);
-  --aura-secondary: hsl(calc(var(--aura-hue) + 40deg), 96%, 52%);
-  --aura-scale: 1;
+  /* Строго монохромная неоновая палитра Bloom 2 */
+  --bloom-core: #ffffff;
+  --bloom-silver: #e2e8f0;
+  --bloom-soft: rgba(255, 255, 255, 0.45);
+  --bloom-ambient: rgba(255, 255, 255, 0.15);
 
   font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -31,46 +31,64 @@ main {
   max-width: 440px;
   width: 100%;
   margin: auto;
-  padding: 14px 16px 40px;
+  padding: 12px 16px 36px;
 }
 
-/* ────────────────── КНОПКИ И НАВИГАЦИЯ (ЧЕРНО-БЕЛЫЙ ГРАДИЕНТ) ────────────────── */
+/* ────────────────── СИСТЕМА КНОПОК BLOOM 2 (НЕОНОВОЕ БЕЛОЕ СВЕЧЕНИЕ) ────────────────── */
 button {
-  background: linear-gradient(180deg, #18181e 0%, #0c0c10 100%);
-  color: var(--text-primary);
-  border: 1px solid var(--panel-border);
+  background: rgba(18, 18, 24, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 12px;
   min-height: 42px;
-  padding: 0 13px;
+  padding: 0 14px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.12), 0 2px 8px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.22);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
 
 button:hover {
-  background: linear-gradient(180deg, #24242e 0%, #121217 100%);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(28, 28, 36, 0.95);
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.45), 0 0 32px rgba(255, 255, 255, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
 }
 
 button:active {
   transform: scale(0.97);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
 }
 
 button:focus-visible {
   outline: 2px solid #ffffff;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.7);
 }
 
-button[aria-pressed=true], #play {
-  background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
+/* Активное состояние кнопки (Bloom 2 High Glow) */
+button[aria-pressed="true"], #play {
+  background: #ffffff;
   color: #000000;
   border-color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.9), 0 0 36px rgba(255, 255, 255, 0.5), 0 0 65px rgba(255, 255, 255, 0.25), inset 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
+button[aria-pressed="true"]:hover, #play:hover {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 24px rgba(255, 255, 255, 1), 0 0 48px rgba(255, 255, 255, 0.65), 0 0 85px rgba(255, 255, 255, 0.35);
 }
 
 nav, .controls {
   display: flex;
-  gap: 6px;
+  gap: 7px;
   justify-content: space-between;
 }
 
@@ -80,7 +98,7 @@ nav button {
   min-height: 38px;
 }
 
-/* ────────────────── ПОИСК И ГРОМКОСТЬ (MONOCHROME GLASS) ────────────────── */
+/* ────────────────── ПОИСК И РЕГУЛЯТОР ГРОМКОСТИ ────────────────── */
 .search-bar {
   display: flex;
   gap: 8px;
@@ -89,7 +107,8 @@ nav button {
 
 .search-bar input {
   flex: 1;
-  background: #08080a;
+  background: rgba(12, 12, 16, 0.85);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   padding: 9px 13px;
@@ -100,17 +119,22 @@ nav button {
 }
 
 .search-bar input:focus {
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 14px rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.22);
 }
 
 .search-bar button {
-  background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
+  background: #ffffff;
   color: #000000;
-  border: 0;
+  border: 1px solid #ffffff;
   font-weight: 700;
   font-size: 13px;
-  padding: 0 15px;
+  padding: 0 16px;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.4);
+}
+
+.search-bar button:hover {
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.75);
 }
 
 .top-volume {
@@ -119,16 +143,24 @@ nav button {
   gap: 10px;
   margin: 8px 0 6px;
   padding: 6px 14px;
-  background: #08080a;
+  background: rgba(14, 14, 18, 0.85);
+  backdrop-filter: blur(10px);
   border-radius: 12px;
   border: 1px solid var(--panel-border);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
 }
 
-.top-volume span {
+.top-volume .vol-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.top-volume span#volumeLabel {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 600;
-  min-width: 55px;
+  min-width: 42px;
 }
 
 .top-volume input {
@@ -136,46 +168,43 @@ nav button {
   accent-color: #ffffff;
 }
 
-/* ────────────────── ВИНИЛОВАЯ ПЛАСТИНКА И АУРА ────────────────── */
+/* ────────────────── КРУГОВАЯ АУРА И ВИНИЛОВЫЙ ДИСК (MONOCHROME AURA) ────────────────── */
 .art {
-  display: grid;
-  place-items: center;
-  padding: 18px 0 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 6px;
   position: relative;
 }
 
 .aura-container {
   position: relative;
-  width: min(58vw, 240px);
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
+  width: min(82vw, 340px);
+  height: min(82vw, 340px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Живая неоновая аура (пульсирует под биты и меняет цвета) */
-.aura-glow {
+#aura-canvas {
   position: absolute;
-  inset: -22px;
-  border-radius: 50%;
-  background: radial-gradient(circle at center, var(--aura-primary) 0%, var(--aura-secondary) 40%, transparent 72%);
-  filter: blur(28px);
-  opacity: 0.6;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 1;
-  transform: scale(var(--aura-scale, 1));
-  transition: transform 0.08s ease-out, opacity 0.15s ease, background 0.8s ease;
 }
 
 #sleeve {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 130px;
+  height: 130px;
   border-radius: 50%;
-  background: repeating-radial-gradient(circle at center, #18181c 0 3px, #272730 4px 5px);
-  box-shadow: 0 0 35px var(--aura-primary), inset 0 0 25px rgba(0, 0, 0, 0.9);
+  background: repeating-radial-gradient(circle at center, #151518 0 3px, #26262e 4px 5px);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.4), inset 0 0 25px rgba(0, 0, 0, 0.95);
   overflow: hidden;
   z-index: 2;
-  transition: transform 0.08s ease-out, box-shadow 0.4s ease;
+  transition: transform 0.08s ease-out, box-shadow 0.25s ease;
   animation: vinyl-spin 20s linear infinite;
   animation-play-state: paused;
 }
@@ -195,7 +224,7 @@ body.playing #sleeve {
   inset: 0;
   border-radius: 50%;
   padding: 3px;
-  background: conic-gradient(from -90deg, #ffffff 0deg, var(--aura-primary) var(--progress, 0deg), transparent var(--progress, 0deg));
+  background: conic-gradient(from -90deg, #ffffff 0deg, rgba(255, 255, 255, 0.8) var(--progress, 0deg), transparent var(--progress, 0deg));
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   -webkit-mask-composite: xor;
@@ -211,20 +240,22 @@ body.playing #sleeve {
 
 @keyframes fade { from { opacity: 0; } }
 
-canvas {
+#spectrum {
   display: block;
   width: 100%;
-  height: 44px;
-  margin: 4px 0;
+  height: 36px;
+  margin: 2px 0 4px;
 }
 
 /* ────────────────── ИНФОРМАЦИЯ О ТРЕКЕ ────────────────── */
 h1 {
   font-size: 22px;
-  margin: 8px 0 2px;
+  margin: 6px 0 2px;
   text-align: center;
   font-weight: 700;
   letter-spacing: -0.3px;
+  color: #ffffff;
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.25);
 }
 
 p#artist {
@@ -240,16 +271,18 @@ p#status {
   text-align: center;
   font-size: 12px;
   min-height: 16px;
+  letter-spacing: 0.2px;
 }
 
-input {
+input[type="range"] {
   width: 100%;
   accent-color: #ffffff;
+  cursor: pointer;
 }
 
 output { font-weight: 500; font-variant-numeric: tabular-nums; }
 
-.seek-container { margin: 6px 0 4px; }
+.seek-container { margin: 6px 0 6px; }
 .time-row {
   display: flex;
   justify-content: space-between;
@@ -259,31 +292,38 @@ output { font-weight: 500; font-variant-numeric: tabular-nums; }
 }
 
 .controls { margin-top: 4px; }
-.controls button { font-size: 17px; }
+.controls button {
+  min-width: 48px;
+  min-height: 44px;
+}
 
-/* ────────────────── КНОПКА СКАЧАТЬ В TELEGRAM ────────────────── */
+#play {
+  min-width: 58px;
+}
+
+/* ────────────────── КНОПКА СКАЧАТЬ В TELEGRAM (BLOOM 2 СТИЛЬ) ────────────────── */
 .dl-container { margin: 12px 0 12px; }
 .dl-btn {
   width: 100%;
-  min-height: 46px;
-  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
-  color: #09090b;
+  min-height: 48px;
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e6 100%);
+  color: #000000;
+  border: 1px solid #ffffff;
   border-radius: 14px;
   font-weight: 700;
-  font-size: 13.5px;
-  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.22);
+  font-size: 14px;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.5), 0 0 45px rgba(255, 255, 255, 0.25), 0 4px 14px rgba(0, 0, 0, 0.8);
   letter-spacing: 0.2px;
-  border: 0;
 }
 
 .dl-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 0 32px rgba(255, 255, 255, 0.85), 0 0 65px rgba(255, 255, 255, 0.45);
 }
 
 /* ────────────────── ОЧЕРЕДЬ ТРЕКОВ ────────────────── */
 h2#list-title {
-  font-size: 15px;
+  font-size: 14px;
   margin: 14px 0 8px;
   color: var(--text-secondary);
   font-weight: 600;
@@ -296,23 +336,25 @@ li.track-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #09090c;
+  background: rgba(14, 14, 18, 0.85);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   margin-bottom: 6px;
-  padding: 4px 6px 4px 10px;
+  padding: 4px 8px 4px 12px;
   transition: all 0.15s ease;
 }
 
 li.track-row:hover {
-  background: #141419;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(24, 24, 30, 0.95);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
 }
 
 li.track-row.active {
   border-color: #ffffff;
-  background: #181820;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+  background: rgba(30, 30, 38, 0.95);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.22);
 }
 
 .track-info-btn {
@@ -330,24 +372,31 @@ li.track-row.active {
   border-radius: 0;
   cursor: pointer;
   color: var(--text-primary);
+  display: block;
 }
 
 .track-info-btn:hover {
   background: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .track-dl-icon {
-  background: linear-gradient(180deg, #2a2a32 0%, #18181e 100%);
+  background: rgba(28, 28, 36, 0.9);
   min-height: 32px;
-  min-width: 32px;
+  min-width: 48px;
   padding: 0 8px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
   color: #ffffff;
-  border: 1px solid var(--panel-border);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.08);
 }
 
 .track-dl-icon:hover {
   background: #ffffff;
-  color: #09090b;
+  color: #000000;
+  border-color: #ffffff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.55);
 }

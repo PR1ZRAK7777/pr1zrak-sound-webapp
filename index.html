@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>ПРИЗРАК — Скачать трек</title>
+  <title>ПРИЗРАК — Музыкальный плеер</title>
   <link rel="stylesheet" href="./style.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -11,34 +11,41 @@
 <main>
   <header class="app-header">
     <div class="search-bar">
-      <input id="search-input" type="search" placeholder="🔍 Найти трек или артиста..." autocomplete="off">
+      <input id="search-input" type="search" placeholder="Найти трек или артиста..." autocomplete="off">
       <button id="search-btn">Искать</button>
     </div>
     <nav aria-label="Плейлисты">
-      <button data-list="wave" aria-pressed="true">🌊 Волна</button>
-      <button data-list="favorites">💜 Мои треки</button>
-      <button data-list="top">🔥 Топ</button>
-      <button data-list="search" id="tab-search" style="display:none">🔍 Поиск</button>
+      <button data-list="wave" aria-pressed="true">Волна</button>
+      <button data-list="favorites">Мои треки</button>
+      <button data-list="top">Топ</button>
+      <button data-list="search" id="tab-search" style="display:none">Поиск</button>
     </nav>
     <div class="top-volume">
-      <span id="volumeLabel">🔊 85%</span>
+      <span class="vol-icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      </span>
+      <span id="volumeLabel">85%</span>
       <input id="volume" type="range" min="0" max="100" value="85" aria-label="Громкость">
     </div>
   </header>
 
   <section class="art">
     <div class="aura-container">
-      <div id="aura-glow" class="aura-glow"></div>
+      <canvas id="aura-canvas" width="340" height="340" aria-label="Аура трека"></canvas>
       <div id="sleeve">
-        <img id="cover" alt="" hidden>
+        <img id="cover" alt="Обложка" hidden>
       </div>
     </div>
   </section>
-  <canvas id="spectrum" width="384" height="48" aria-hidden="true"></canvas>
+  <canvas id="spectrum" width="384" height="36" aria-hidden="true"></canvas>
 
   <h1 id="title">Загрузка музыки…</h1>
   <p id="artist">ПРИЗРАК</p>
-  <p id="status" role="status"></p>
+  <p id="status" role="status">Студийный звук • 320 kbps</p>
   <audio id="audio" preload="auto" playsinline></audio>
 
   <div class="seek-container">
@@ -50,15 +57,46 @@
   </div>
 
   <div class="controls">
-    <button id="prev" aria-label="Предыдущий">⏮</button>
-    <button id="play" aria-label="Воспроизвести">▶</button>
-    <button id="next" aria-label="Следующий">⏭</button>
-    <button id="shuffle" aria-label="Перемешать">⤨</button>
-    <button id="like" aria-label="В избранное">♡</button>
+    <button id="prev" aria-label="Предыдущий">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+      </svg>
+    </button>
+    <button id="play" aria-label="Воспроизвести">
+      <span id="play-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="7,4 20,12 7,20"/>
+        </svg>
+      </span>
+    </button>
+    <button id="next" aria-label="Следующий">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+      </svg>
+    </button>
+    <button id="shuffle" aria-label="Перемешать">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
+      </svg>
+    </button>
+    <button id="like" aria-label="В избранное">
+      <span id="like-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+      </span>
+    </button>
   </div>
 
   <div class="dl-container">
-    <button id="dl-current-btn" class="dl-btn" aria-label="Скачать текущий трек">⚡️ Скачать в Telegram (320 kbps)</button>
+    <button id="dl-current-btn" class="dl-btn" aria-label="Скачать текущий трек">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span>Скачать в Telegram (320 kbps)</span>
+    </button>
   </div>
 
   <h2 id="list-title">Очередь воспроизведения</h2>

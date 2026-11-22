@@ -6,38 +6,33 @@ const tg = window.Telegram?.WebApp;
 const uid = tg?.initDataUnsafe?.user?.id || 0;
 const audio = el("audio");
 const sleeve = el("sleeve");
-const auraGlow = el("aura-glow");
-const visualizer = makeVisualizer(audio, el("spectrum"), sleeve, auraGlow);
+const auraCanvas = el("aura-canvas");
+const visualizer = makeVisualizer(audio, el("spectrum"), sleeve, auraCanvas);
 
 const DEFAULT_COVER = "./assets/default-cover.png";
 
-// Палитра оттенков ауры для треков
-const TRACK_HUES = [275, 190, 340, 38, 145, 215, 305, 175, 355, 45, 125, 230];
-
-// Проверенные HTTPS MP3 потоки (работают в любых Webview без CORS-ошибок)
-const MP3_FALLBACK_STREAMS = [
-  "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3",
-  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
-  "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3"
+// Локальные проверенные MP3 файлы и fallback CDN
+const MP3_LOCAL_PREVIEWS = [
+  "./assets/preview1.mp3",
+  "./assets/preview2.mp3",
+  "./assets/preview3.mp3",
+  "./assets/preview4.mp3"
 ];
 
-// Каталог популярных треков с привязкой к стилям ауры
+// Каталог популярных треков (чистый звук без зависимости от внешних CDN)
 const SEED_CATALOG = [
-  { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 192, hue: 275, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[0] },
-  { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 145, hue: 190, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[1] },
-  { id: 103, artist: "prodwhiteball & ProdbyJane", title: "ural mountains", duration_sec: 113, hue: 340, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[2] },
-  { id: 104, artist: "Miyagi & Andy Panda", title: "Minor", duration_sec: 175, hue: 38, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[3] },
-  { id: 105, artist: "Big Baby Tape & Kizaru", title: "99 Problems", duration_sec: 154, hue: 145, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[4] },
-  { id: 106, artist: "Macan", title: "ASPHALT 8", duration_sec: 160, hue: 215, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[5] },
-  { id: 107, artist: "LXST CXNTURY", title: "ODIUM", duration_sec: 168, hue: 305, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[0] },
-  { id: 108, artist: "DVRST", title: "Close Eyes", duration_sec: 132, hue: 175, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[1] },
-  { id: 109, artist: "SCIRENA", title: "Восемь", duration_sec: 180, hue: 355, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[2] },
-  { id: 110, artist: "Скриптонит", title: "Положение", duration_sec: 200, hue: 45, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[3] },
-  { id: 111, artist: "OG Buda", title: "Бандит", duration_sec: 140, hue: 125, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[4] },
-  { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 158, hue: 230, cover_url: DEFAULT_COVER, audio_url: MP3_FALLBACK_STREAMS[5] },
+  { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 192, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
+  { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 145, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
+  { id: 103, artist: "prodwhiteball & ProdbyJane", title: "ural mountains", duration_sec: 113, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
+  { id: 104, artist: "Miyagi & Andy Panda", title: "Minor", duration_sec: 175, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[0] },
+  { id: 105, artist: "Big Baby Tape & Kizaru", title: "99 Problems", duration_sec: 154, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
+  { id: 106, artist: "Macan", title: "ASPHALT 8", duration_sec: 160, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
+  { id: 107, artist: "LXST CXNTURY", title: "ODIUM", duration_sec: 168, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
+  { id: 108, artist: "DVRST", title: "Close Eyes", duration_sec: 132, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
+  { id: 109, artist: "SCIRENA", title: "Восемь", duration_sec: 180, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[0] },
+  { id: 110, artist: "Скриптонит", title: "Положение", duration_sec: 200, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[1] },
+  { id: 111, artist: "OG Buda", title: "Бандит", duration_sec: 140, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[2] },
+  { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 158, cover_url: DEFAULT_COVER, audio_url: MP3_LOCAL_PREVIEWS[3] },
 ];
 
 /* ────────────────── ВСТРОЕННЫЙ СИНТЕЗАТОР БИТОВ (100% ГАРАНТИЯ ЗВУКА) ────────────────── */
@@ -62,7 +57,7 @@ class ProceduralSynth {
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 256;
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = audio.volume;
+      this.masterGain.gain.value = audio.volume || 0.85;
       this.masterGain.connect(this.analyser);
       this.analyser.connect(this.ctx.destination);
     }
@@ -82,13 +77,13 @@ class ProceduralSynth {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.frequency.setValueAtTime(160, time);
-    osc.frequency.exponentialRampToValueAtTime(38, time + 0.16);
+    osc.frequency.exponentialRampToValueAtTime(36, time + 0.18);
     gain.gain.setValueAtTime(1.0, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.38);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.40);
     osc.connect(gain);
     gain.connect(this.masterGain);
     osc.start(time);
-    osc.stop(time + 0.4);
+    osc.stop(time + 0.42);
   }
 
   playSnare(time) {
@@ -144,7 +139,7 @@ class ProceduralSynth {
     osc.stop(time + duration + 0.02);
   }
 
-  start(onTick, onAuraColorShift) {
+  start(onTick) {
     this.ensureContext();
     this.isPlaying = true;
     document.body.classList.add("playing");
@@ -179,11 +174,6 @@ class ProceduralSynth {
       this.step++;
       this.currentTime += stepDuration;
 
-      // Динамическая смена цвета ауры каждые 32 шага (2 такта)
-      if (this.step % 32 === 0 && onAuraColorShift) {
-        onAuraColorShift();
-      }
-
       if (onTick) onTick(this.currentTime, this.duration);
       this.timer = setTimeout(schedule, stepDuration * 1000);
     };
@@ -202,6 +192,28 @@ class ProceduralSynth {
 }
 
 const synth = new ProceduralSynth();
+
+// Автоматическая глобальная разблокировка звука при первом касании / клике в Telegram WebApp
+function unlockAudioEngine() {
+  synth.ensureContext();
+  if (synth.ctx && synth.ctx.state === "suspended") {
+    synth.ctx.resume().catch(() => {});
+  }
+  // Тихий импульс Web Audio для снятия аппаратных ограничений WebView
+  if (synth.ctx) {
+    try {
+      const buffer = synth.ctx.createBuffer(1, 1, 22050);
+      const source = synth.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(synth.ctx.destination);
+      source.start(0);
+    } catch (_) {}
+  }
+}
+
+["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(evt => {
+  window.addEventListener(evt, unlockAudioEngine, { once: true, passive: true, capture: true });
+});
 
 let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, song = 0, objectURL = null, refilling = false;
 
@@ -228,7 +240,6 @@ async function api(path, options = {}) {
 }
 
 function showError(e) {
-  // Не показываем ошибку отсутствия кодеков в статусе — сразу играем через синтезатор
   if (e?.message && !e.message.includes("supported sources")) {
     if (el("status")) el("status").textContent = e.message;
   }
@@ -245,16 +256,26 @@ function downloadInTelegram(t) {
   }
 }
 
-function updateAuraForTrack(t) {
-  if (!t) return;
-  const hue = t.hue || TRACK_HUES[index % TRACK_HUES.length];
-  visualizer.setHue(hue);
+function updatePlayIcon(isPlaying) {
+  const icon = el("play-icon");
+  if (!icon) return;
+  if (isPlaying) {
+    icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    el("play").setAttribute("aria-label", "Пауза");
+  } else {
+    icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20"/></svg>`;
+    el("play").setAttribute("aria-label", "Воспроизвести");
+  }
 }
 
-function shiftAuraDynamically() {
-  const currentHue = parseInt(document.documentElement.style.getPropertyValue("--aura-hue")) || 275;
-  const nextHue = (currentHue + 35) % 360;
-  visualizer.setHue(nextHue);
+function updateLikeIcon(isLiked) {
+  const icon = el("like-icon");
+  if (!icon) return;
+  if (isLiked) {
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+  } else {
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+  }
 }
 
 function render() {
@@ -270,26 +291,24 @@ function render() {
     cover.src = art;
   }
 
-  updateAuraForTrack(t);
-
-  el("like").textContent = t && liked.has(t.id) ? "♥" : "♡";
-  el("like").setAttribute("aria-pressed", String(Boolean(t && liked.has(t.id))));
+  const isLiked = Boolean(t && liked.has(t.id));
+  updateLikeIcon(isLiked);
+  el("like").setAttribute("aria-pressed", String(isLiked));
 
   const queueEl = el("queue");
   queueEl.innerHTML = "";
-
   tracks.forEach((track, i) => {
     const li = document.createElement("li");
     li.className = "track-row" + (i === index ? " active" : "");
 
     const btnPlay = document.createElement("button");
     btnPlay.className = "track-info-btn";
-    btnPlay.textContent = (i === index ? "▶ " : "") + `${track.artist} — ${track.title}`;
+    btnPlay.textContent = (i === index ? "• " : "") + `${track.artist} — ${track.title}`;
     btnPlay.onclick = () => play(i).catch(showError);
 
     const btnDl = document.createElement("button");
     btnDl.className = "track-dl-icon";
-    btnDl.textContent = "⬇";
+    btnDl.textContent = "MP3";
     btnDl.title = "Скачать в Telegram (320 kbps)";
     btnDl.onclick = (e) => {
       e.stopPropagation();
@@ -339,35 +358,48 @@ async function play(i) {
   audio.pause();
   render();
 
-  el("status").textContent = "⚡️ Студийный звук • 320 kbps";
-  updateAuraForTrack(selected);
+  el("status").textContent = "Студийный звук • 320 kbps";
+
+  // Разблокируем аудиоконтекст
+  unlockAudioEngine();
 
   let playedWithAudio = false;
 
-  // 1. Попытка воспроизведения через HTML5 Audio
-  try {
-    const res = await api("audio/" + selected.id);
-    if (res) {
-      const blob = await res.blob();
-      if (id !== song) return;
-      if (objectURL) URL.revokeObjectURL(objectURL);
-      audio.src = objectURL = URL.createObjectURL(blob);
-    } else if (selected.audio_url) {
-      audio.src = selected.audio_url;
-    }
+  // Определение источника аудио: локальный MP3 файл из webapp/assets/ гарантирует 100% работу
+  let streamSrc = selected.audio_url || MP3_LOCAL_PREVIEWS[i % MP3_LOCAL_PREVIEWS.length];
 
-    if (audio.src) {
-      await visualizer.start();
-      await audio.play();
-      playedWithAudio = true;
-      document.body.classList.add("playing");
-      el("play").textContent = "Ⅱ";
+  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+
+  if (!isGitHubPages) {
+    try {
+      const res = await api("audio/" + selected.id);
+      if (res && res.ok) {
+        const blob = await res.blob();
+        if (id !== song) return;
+        if (objectURL) URL.revokeObjectURL(objectURL);
+        streamSrc = objectURL = URL.createObjectURL(blob);
+      }
+    } catch (_) {}
+  }
+
+  // Воспроизведение через HTML5 Audio (нативный вывод в динамики)
+  try {
+    audio.src = streamSrc;
+    audio.volume = 0.85;
+    audio.muted = false;
+    await visualizer.start();
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      await playPromise;
     }
+    playedWithAudio = true;
+    document.body.classList.add("playing");
+    updatePlayIcon(true);
   } catch (err) {
     playedWithAudio = false;
   }
 
-  // 2. Если аудиопоток не запустился — МГНОВЕННО включаем встроенный синтезатор битов
+  // Если HTML5 Audio заблокирован политикой браузера — мгновенно включаем синтезатор битов
   if (!playedWithAudio) {
     synth.ensureContext();
     await visualizer.start(synth.ctx, synth.analyser);
@@ -376,16 +408,16 @@ async function play(i) {
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
       el("sleeve").style.setProperty("--progress", (totalDuration ? (360 * currentTime) / totalDuration : 0) + "deg");
-    }, shiftAuraDynamically);
+    });
 
-    el("play").textContent = "Ⅱ";
+    updatePlayIcon(true);
     document.body.classList.add("playing");
   }
 
-  await Promise.all([
-    api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }),
-    refill()
-  ]);
+  if (!isGitHubPages) {
+    api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
+  }
+  refill().catch(() => {});
 }
 
 // Защита от системных ошибок воспроизведения
@@ -398,8 +430,8 @@ audio.onerror = () => {
       el("time-total").textContent = clock(totalDuration);
       el("seek").value = totalDuration ? (100 * currentTime) / totalDuration : 0;
       el("sleeve").style.setProperty("--progress", (totalDuration ? (360 * currentTime) / totalDuration : 0) + "deg");
-    }, shiftAuraDynamically);
-    el("play").textContent = "Ⅱ";
+    });
+    updatePlayIcon(true);
   }
 };
 
@@ -425,13 +457,17 @@ async function select(name) {
 
   const lt = el("list-title");
   if (lt) {
-    lt.textContent = name === "favorites" ? "Мои сохранённые треки" : name === "top" ? "🔥 Топ хитов" : "Очередь воспроизведения";
+    lt.textContent = name === "favorites" ? "Мои сохранённые треки" : name === "top" ? "Топ хитов" : "Очередь воспроизведения";
   }
 
   let result = null;
-  const res = await api(name === "top" ? "top" : `${name}/${uid}`);
-  if (res) {
-    result = await res.json();
+  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+
+  if (!isGitHubPages) {
+    const res = await api(name === "top" ? "top" : `${name}/${uid}`);
+    if (res && res.ok) {
+      result = await res.json();
+    }
   }
 
   if (!result || !result.length) {
@@ -447,7 +483,7 @@ async function select(name) {
   if (r !== revision) return;
   tracks = result;
   render();
-  el("status").textContent = tracks.length ? "⚡️ Студийный звук • 320 kbps" : "Пока нет треков.";
+  el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Пока нет треков.";
 }
 
 for (const b of document.querySelectorAll("[data-list]")) {
@@ -455,28 +491,32 @@ for (const b of document.querySelectorAll("[data-list]")) {
 }
 
 el("play").onclick = () => {
+  unlockAudioEngine();
   if (synth.isPlaying) {
     synth.stop();
-    el("play").textContent = "▶";
+    updatePlayIcon(false);
     document.body.classList.remove("playing");
   } else if (!audio.paused && audio.src) {
     audio.pause();
-    el("play").textContent = "▶";
+    updatePlayIcon(false);
     document.body.classList.remove("playing");
   } else if (audio.getAttribute("src")) {
-    audio.play().catch(() => play(index));
+    audio.play().then(() => {
+      updatePlayIcon(true);
+      document.body.classList.add("playing");
+    }).catch(() => play(index));
   } else {
     play(index).catch(showError);
   }
 };
 
 audio.onplay = () => {
-  el("play").textContent = "Ⅱ";
+  updatePlayIcon(true);
   document.body.classList.add("playing");
 };
 audio.onpause = () => {
   if (!synth.isPlaying) {
-    el("play").textContent = "▶";
+    updatePlayIcon(false);
     document.body.classList.remove("playing");
   }
 };
@@ -504,14 +544,14 @@ el("seek").oninput = e => {
 el("volume").oninput = e => {
   const v = e.target.value / 100;
   audio.volume = v;
+  audio.muted = false;
   synth.setVolume(v);
-  el("volumeLabel").textContent = (v === 0 ? "🔇" : v < 0.34 ? "🔈" : v < 0.67 ? "🔉" : "🔊") + " " + Math.round(v * 100) + "%";
+  el("volumeLabel").textContent = Math.round(v * 100) + "%";
 };
 audio.volume = 0.85;
 
 el("shuffle").onclick = () => {
   shuffleUpcoming(tracks, index);
-  shiftAuraDynamically();
   render();
 };
 
@@ -546,9 +586,13 @@ async function doSearch() {
   }
 
   let resTracks = null;
-  const res = await api("search?q=" + encodeURIComponent(query));
-  if (res) {
-    resTracks = await res.json();
+  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+
+  if (!isGitHubPages) {
+    const res = await api("search?q=" + encodeURIComponent(query));
+    if (res && res.ok) {
+      resTracks = await res.json();
+    }
   }
 
   if (!resTracks || !resTracks.length) {
@@ -560,9 +604,8 @@ async function doSearch() {
         artist: "Найдено по запросу",
         title: query,
         duration_sec: 180,
-        hue: 200,
         cover_url: DEFAULT_COVER,
-        audio_url: MP3_FALLBACK_STREAMS[0]
+        audio_url: MP3_LOCAL_PREVIEWS[0]
       }];
     }
   }
@@ -570,7 +613,7 @@ async function doSearch() {
   if (r !== revision) return;
   tracks = resTracks;
   render();
-  el("status").textContent = tracks.length ? "⚡️ Студийный звук • 320 kbps" : "Ничего не найдено.";
+  el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Ничего не найдено.";
   const lt = el("list-title");
   if (lt) lt.textContent = `Результаты поиска (${tracks.length})`;
 }
@@ -586,10 +629,13 @@ el("like").onclick = async () => {
   el("like").disabled = true;
   try {
     const was = liked.has(t.id);
-    await api("like", {
-      method: was ? "DELETE" : "POST",
-      body: JSON.stringify({ id: t.id })
-    });
+    const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+    if (!isGitHubPages) {
+      await api("like", {
+        method: was ? "DELETE" : "POST",
+        body: JSON.stringify({ id: t.id })
+      });
+    }
     if (was) liked.delete(t.id);
     else liked.add(t.id);
 
@@ -645,10 +691,13 @@ async function init() {
     if (saved) liked = new Set(JSON.parse(saved));
   } catch (_) {}
 
-  const res = await api("favorites/" + uid);
-  if (res) {
-    const favs = await res.json();
-    liked = new Set(favs.map(t => t.id));
+  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+  if (!isGitHubPages) {
+    const res = await api("favorites/" + uid);
+    if (res && res.ok) {
+      const favs = await res.json();
+      liked = new Set(favs.map(t => t.id));
+    }
   }
 
   await select("wave");
