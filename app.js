@@ -1321,20 +1321,120 @@ el("like").onclick = async () => {
   }
 };
 
-const dlBtn = el("download-tg");
-if (dlBtn) {
-  dlBtn.onclick = () => {
-    const t = current();
-    if (!t) return;
-    const query = `${t.artist} - ${t.title}`.trim();
-    const deepLink = `https://t.me/PR1ZRAKWORK_BOT?start=dl_${encodeURIComponent(query).replace(/%20/g, "_")}`;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(deepLink);
-    } else {
-      window.open(deepLink, "_blank");
-    }
-  };
+function showToast(text, duration = 2500) {
+  const toast = el("toast");
+  if (!toast) return;
+  toast.textContent = text;
+  toast.classList.add("show");
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, duration);
 }
+
+function openDownloadModal() {
+  const t = current();
+  if (!t) {
+    showToast("⚠️ Сначала выберите трек");
+    return;
+  }
+  const modal = el("dl-modal");
+  const desc = el("modal-track-desc");
+  if (desc) desc.textContent = `${t.artist} — ${t.title}`;
+  if (modal) {
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeDownloadModal() {
+  const modal = el("dl-modal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+async function triggerDirectDownload() {
+  const t = current();
+  if (!t) return;
+  closeDownloadModal();
+
+  const audioUrl = t.audio_url;
+  if (!audioUrl) {
+    showToast("⚠️ Аудиофайл пока недоступен");
+    return;
+  }
+
+  showToast("⏳ Сохраняю аудиофайл...");
+  const cleanFilename = `${t.artist} - ${t.title}`.replace(/[\\/:*?"<>|#]/g, "_").trim() + ".mp3";
+
+  try {
+    const response = await fetch(audioUrl);
+    if (!response.ok) throw new Error("fetch failed");
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = cleanFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+    showToast("✅ Файл сохранён в Загрузки!");
+  } catch (_) {
+    const a = document.createElement("a");
+    a.href = audioUrl;
+    a.download = cleanFilename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast("✅ Загрузка началась!");
+  }
+}
+
+function encodeTelegramTrackQuery(artist, title) {
+  const cleanArtist = (artist || "").split(/[&,/]| feat| ft\./i)[0].replace(/[#&?\\/|<>*:"~`]/g, " ").trim();
+  const cleanTitle = (title || "").replace(/[#&?\\/|<>*:"~`]/g, " ").trim();
+  let query = `${cleanArtist} ${cleanTitle}`.replace(/\s+/g, " ").trim();
+  if (!query) query = "музыка";
+
+  let b64 = "";
+  try {
+    const utf8Str = unescape(encodeURIComponent(query));
+    // 36 bytes in base64 is 48 chars + 'b_' = 50 chars <= 64 chars limit
+    const sliced = utf8Str.slice(0, 36);
+    b64 = btoa(sliced).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch (_) {
+    b64 = query.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40);
+  }
+  return "b_" + (b64 || "music");
+}
+
+function triggerTelegramDownload() {
+  const t = current();
+  if (!t) return;
+  closeDownloadModal();
+
+  const code = encodeTelegramTrackQuery(t.artist, t.title);
+  const deepLink = `https://t.me/PR1ZRAKWORK_BOT?start=${code}`;
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(deepLink);
+  } else {
+    window.open(deepLink, "_blank");
+  }
+}
+
+const dlBtn = el("download-tg");
+if (dlBtn) dlBtn.onclick = openDownloadModal;
+
+el("modal-close")?.addEventListener("click", closeDownloadModal);
+el("dl-modal")?.addEventListener("click", e => {
+  if (e.target === el("dl-modal")) closeDownloadModal();
+});
+el("btn-dl-device")?.addEventListener("click", triggerDirectDownload);
+el("btn-dl-telegram")?.addEventListener("click", triggerTelegramDownload);
 
 async function init() {
   if (tg) {

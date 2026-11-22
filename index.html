@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=17">
+  <link rel="stylesheet" href="./style.css?v=19">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -95,7 +95,7 @@
         </svg>
       </span>
     </button>
-    <button id="download-tg" aria-label="Скачать целиком в Telegram" title="Скачать полную версию трека в Telegram">
+    <button id="download-tg" aria-label="Скачать трек" title="Скачать трек на устройство или в Telegram">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
@@ -106,7 +106,43 @@
 
   <h2 id="list-title">Очередь воспроизведения</h2>
   <ol id="queue"></ol>
+
+  <!-- Модальное окно выбора способа скачивания -->
+  <div id="dl-modal" class="modal-backdrop" aria-hidden="true" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span class="modal-title">Скачать трек</span>
+        <button id="modal-close" class="modal-close-btn" aria-label="Закрыть">&times;</button>
+      </div>
+      <p id="modal-track-desc" class="modal-track-info">Загрузка информации…</p>
+      <div class="modal-actions">
+        <button id="btn-dl-device" class="modal-btn modal-btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <div class="modal-btn-content">
+            <span class="btn-main">Скачать на устройство</span>
+            <span class="btn-sub">Быстрое сохранение аудио в Загрузки</span>
+          </div>
+        </button>
+        <button id="btn-dl-telegram" class="modal-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <div class="modal-btn-content">
+            <span class="btn-main">Получить в 320 kbps в Telegram</span>
+            <span class="btn-sub">Полная студийная версия через бота</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice" aria-live="polite"></div>
 </main>
-<script type="module" src="./app.js?v=18"></script>
+<script type="module" src="./app.js?v=19"></script>
 </body>
 </html>
