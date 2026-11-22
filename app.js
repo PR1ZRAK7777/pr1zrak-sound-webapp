@@ -643,7 +643,7 @@ function render() {
 
     const trackDur = document.createElement("span");
     trackDur.className = "track-duration-text";
-    trackDur.textContent = clock(track.duration_sec);
+    trackDur.textContent = track.is_preview ? `${clock(track.full_duration_sec || 180)} (превью)` : clock(track.duration_sec);
 
     li.append(infoSpan, trackDur);
 
@@ -820,7 +820,11 @@ async function play(i) {
     return;
   }
 
-  el("status").textContent = "";
+  if (selected && selected.is_preview) {
+    el("status").textContent = "⚡ Превью 30с • Нажмите 📥 для полной версии 320 kbps";
+  } else {
+    el("status").textContent = "";
+  }
   document.body.classList.add("playing");
   updatePlayIcon(true);
   visualizer.setPlaying(true, getCurrentPlaybackTime);
@@ -1208,7 +1212,9 @@ async function doSearch() {
             id: "global-" + r.trackId,
             artist: r.artistName || "Артист",
             title: r.trackName || query,
-            duration_sec: Math.round((r.trackTimeMillis || 30000) / 1000),
+            is_preview: true,
+            full_duration_sec: Math.round((r.trackTimeMillis || 30000) / 1000),
+            duration_sec: 29,
             cover_url: (r.artworkUrl100 || "").replace("100x100bb", "600x600bb") || DEFAULT_COVER,
             audio_url: r.previewUrl
           }));
@@ -1283,6 +1289,21 @@ el("like").onclick = async () => {
     el("like").disabled = !current();
   }
 };
+
+const dlBtn = el("download-tg");
+if (dlBtn) {
+  dlBtn.onclick = () => {
+    const t = current();
+    if (!t) return;
+    const query = `${t.artist} - ${t.title}`.trim();
+    const deepLink = `https://t.me/PR1ZRAKWORK_BOT?start=dl_${encodeURIComponent(query).replace(/%20/g, "_")}`;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(deepLink);
+    } else {
+      window.open(deepLink, "_blank");
+    }
+  };
+}
 
 async function init() {
   if (tg) {

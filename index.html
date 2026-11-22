@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=16">
+  <link rel="stylesheet" href="./style.css?v=17">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -95,11 +95,18 @@
         </svg>
       </span>
     </button>
+    <button id="download-tg" aria-label="Скачать целиком в Telegram" title="Скачать полную версию трека в Telegram">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
   </div>
 
   <h2 id="list-title">Очередь воспроизведения</h2>
   <ol id="queue"></ol>
 </main>
-<script type="module" src="./app.js?v=16"></script>
+<script type="module" src="./app.js?v=17"></script>
 </body>
 </html>
