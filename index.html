@@ -2,8 +2,9 @@
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Моя Волна</title>
 <link rel="stylesheet" href="/webapp/style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head>
 <body><main><nav aria-label="Плейлисты"><button data-list="favorites">Мои треки</button><button data-list="wave" aria-pressed="true">Моя Волна</button><button data-list="top">Топ</button></nav>
+<div class="top-volume"><span id="volumeLabel">🔊 85%</span><input id="volume" type="range" min="0" max="100" value="85" aria-label="Громкость"></div>
 <section class="art"><div id="sleeve"><img id="cover" alt="" hidden></div></section><canvas id="spectrum" width="384" height="52" aria-hidden="true"></canvas>
 <h1 id="title">Моя Волна</h1><p id="artist"></p><p id="status" role="status"></p><audio id="audio"></audio>
 <label>Позиция <output id="time">0:00</output><input id="seek" type="range" min="0" max="100" value="0"></label>
 <div class="controls"><button id="prev" aria-label="Предыдущий">⏮</button><button id="play" aria-label="Воспроизвести">▶</button><button id="next" aria-label="Следующий">⏭</button><button id="shuffle" aria-label="Перемешать">⤨</button><button id="like" aria-label="В избранное">♡</button></div>
-<label><span id="volumeLabel">🔊 Громкость</span><input id="volume" type="range" min="0" max="100" value="85"></label><h2>Очередь</h2><ol id="queue"></ol></main><script type="module" src="/webapp/app.js"></script></body></html>
+<h2>Очередь</h2><ol id="queue"></ol></main><script type="module" src="/webapp/app.js"></script></body></html>
