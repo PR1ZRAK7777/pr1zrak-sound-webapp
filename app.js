@@ -1,5 +1,5 @@
-import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js";
-import {makeVisualizer} from "./visualizer.js";
+import {appendWaveBatch, shuffleUpcoming} from "./wave-engine.js?v=5";
+import {makeVisualizer} from "./visualizer.js?v=5";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -28,21 +28,139 @@ const MP3_LOCAL_PREVIEWS = [
   getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
 ];
 
-// Каталог популярных треков: реальное аудио для каждого трека 1-к-1
+// Каталог популярных треков: реальное аудио для каждого трека 1-к-1 + поисковые теги
 const SEED_CATALOG = [
-  { id: 101, artist: "fem.love", title: "1000-7", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_femlove_1000_7.mp3") },
-  { id: 102, artist: "Shadowraze", title: "showdown", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_shadowraze_showdown.mp3") },
-  { id: 103, artist: "Miyagi & Andy Panda", title: "Minor", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_miyagi_minor.mp3") },
-  { id: 104, artist: "MACAN", title: "Юг", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_macan_yug.mp3") },
-  { id: 105, artist: "Linkin Park", title: "Numb", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_linkinpark_numb.mp3") },
-  { id: 106, artist: "Big Baby Tape & Kizaru", title: "99 Problems", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_tape_kizaru_99problems.mp3") },
-  { id: 107, artist: "Macan", title: "ASPHALT 8", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_macan_asphalt8.mp3") },
-  { id: 108, artist: "LXST CXNTURY", title: "ODIUM", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_lxstcxntury_odium.mp3") },
-  { id: 109, artist: "DVRST", title: "Close Eyes", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_dvrst_close_eyes.mp3") },
-  { id: 110, artist: "Скриптонит", title: "Положение", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_scriptonite_polozhenie.mp3") },
-  { id: 111, artist: "OG Buda", title: "Бандит", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_ogbuda_bandit.mp3") },
-  { id: 112, artist: "PHARAOH", title: "Black Siemens", duration_sec: 45, cover_url: DEFAULT_COVER, audio_url: getAssetUrl("assets/track_pharaoh_black_siemens.mp3") },
+  {
+    id: 101,
+    artist: "fem.love",
+    title: "1000-7",
+    aliases: ["1000 7", "1000-7", "семь", "тысяча", "fem love", "фем лав", "дед инсайд", "dead inside", "гуль", "zxcursed"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_femlove_1000_7.mp3")
+  },
+  {
+    id: 102,
+    artist: "Shadowraze",
+    title: "showdown",
+    aliases: ["shadowraze", "showdown", "шадоурейз", "шоудаун", "шадоурейс", "дота", "dota", "рейз"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_shadowraze_showdown.mp3")
+  },
+  {
+    id: 103,
+    artist: "Miyagi & Andy Panda",
+    title: "Minor",
+    aliases: ["miyagi", "andy panda", "minor", "мияги", "энди панда", "минор", "hajime"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_miyagi_minor.mp3")
+  },
+  {
+    id: 104,
+    artist: "MACAN",
+    title: "Юг",
+    aliases: ["macan", "юг", "макан", "yug", "на юг"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_macan_yug.mp3")
+  },
+  {
+    id: 105,
+    artist: "Linkin Park",
+    title: "Numb",
+    aliases: ["linkin park", "numb", "линкин парк", "намб", "честер", "chester", "рок", "rock"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_linkinpark_numb.mp3")
+  },
+  {
+    id: 106,
+    artist: "Big Baby Tape & Kizaru",
+    title: "99 Problems",
+    aliases: ["big baby tape", "kizaru", "99 problems", "тэйп", "кизару", "99 проблем", "бандана", "bandana"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_tape_kizaru_99problems.mp3")
+  },
+  {
+    id: 107,
+    artist: "Macan",
+    title: "ASPHALT 8",
+    aliases: ["macan", "asphalt 8", "асфальт 8", "асфальт", "макан"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_macan_asphalt8.mp3")
+  },
+  {
+    id: 108,
+    artist: "LXST CXNTURY",
+    title: "ODIUM",
+    aliases: ["lxst cxntury", "odium", "лост сенчури", "одиум", "фонк", "phonk"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_lxstcxntury_odium.mp3")
+  },
+  {
+    id: 109,
+    artist: "DVRST",
+    title: "Close Eyes",
+    aliases: ["dvrst", "close eyes", "дврст", "клоуз айс", "фонк", "phonk"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_dvrst_close_eyes.mp3")
+  },
+  {
+    id: 110,
+    artist: "Скриптонит",
+    title: "Положение",
+    aliases: ["скриптонит", "положение", "scriptonite", "polozhenie", "скрип"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_scriptonite_polozhenie.mp3")
+  },
+  {
+    id: 111,
+    artist: "OG Buda",
+    title: "Бандит",
+    aliases: ["og buda", "бандит", "ог буда", "буда", "bandit"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_ogbuda_bandit.mp3")
+  },
+  {
+    id: 112,
+    artist: "PHARAOH",
+    title: "Black Siemens",
+    aliases: ["pharaoh", "black siemens", "фараон", "блэк сименс", "скр скр", "сименс"],
+    duration_sec: 45,
+    cover_url: DEFAULT_COVER,
+    audio_url: getAssetUrl("assets/track_pharaoh_black_siemens.mp3")
+  },
 ];
+
+// Умный определитель аудио для любого трека (по ID, названию, артисту или тегам)
+function resolveTrackAudio(track) {
+  if (track && track.audio_url) return track.audio_url;
+  if (!track) return MP3_LOCAL_PREVIEWS[0];
+  const q = `${track.artist || ""} ${track.title || ""}`.toLowerCase();
+  const match = SEED_CATALOG.find(t => {
+    const tArt = t.artist.toLowerCase();
+    const tTit = t.title.toLowerCase();
+    if (q.includes(tTit) || (q.includes(tArt) && tTit.includes(q)) || (tArt.includes(q) && tTit.includes(q))) {
+      return true;
+    }
+    if (t.aliases && t.aliases.some(a => q.includes(a))) {
+      return true;
+    }
+    return false;
+  }) || SEED_CATALOG.find(t => {
+    const tTit = t.title.toLowerCase();
+    return q.includes(tTit) || tTit.includes(q);
+  });
+  return match ? match.audio_url : MP3_LOCAL_PREVIEWS[0];
+}
 
 /* ────────────────── ЕДИНЫЙ АУДИОКОНТЕКСТ И АНАЛИЗАТОР ────────────────── */
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -478,7 +596,7 @@ async function play(i) {
   // СИНХРОННАЯ разблокировка аудиоконтекста в контексте клика
   unlockAudioEngine();
 
-  let streamSrc = selected.audio_url || MP3_LOCAL_PREVIEWS[i % MP3_LOCAL_PREVIEWS.length];
+  let streamSrc = resolveTrackAudio(selected);
   const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
 
   if (!isGitHubPages) {
@@ -495,36 +613,36 @@ async function play(i) {
 
   // 1. Попытка воспроизведения через Web Audio Buffer (гарантирует звук на iOS даже при Silent Switch!)
   let playedSuccessfully = false;
-  const cachedBuffer = audioBufferCache.get(streamSrc);
+  let cachedBuffer = audioBufferCache.get(streamSrc);
 
   if (cachedBuffer) {
     playBufferSource(cachedBuffer, 0, () => play(index + 1));
     playedSuccessfully = true;
   } else {
-    // Если буфер еще не декодирован, мгновенно запускаем нативный <audio> без async задержек
     try {
-      audio.src = streamSrc;
-      audio.volume = currentVolume;
-      audio.muted = false;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        await playPromise;
-      }
-      playedSuccessfully = true;
-    } catch (_) {
-      playedSuccessfully = false;
-    }
-
-    // В фоне скачиваем и декодируем Web Audio буфер для передачи на динамики и анализатор
-    loadAudioBuffer(streamSrc).then(buf => {
-      if (id !== song || !document.body.classList.contains("playing")) return;
+      const buf = await loadAudioBuffer(streamSrc);
+      if (id !== song) return;
       if (buf) {
-        const currentPos = audio.currentTime || 0;
-        audio.pause();
-        audio.muted = true;
-        playBufferSource(buf, currentPos, () => play(index + 1));
+        playBufferSource(buf, 0, () => play(index + 1));
+        playedSuccessfully = true;
       }
-    });
+    } catch (_) {}
+
+    // Фолбэк на HTML5 audio если буфер не удалось декодировать
+    if (!playedSuccessfully) {
+      try {
+        audio.src = streamSrc;
+        audio.volume = currentVolume;
+        audio.muted = false;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+        playedSuccessfully = true;
+      } catch (_) {
+        playedSuccessfully = false;
+      }
+    }
   }
 
   // 2. Если оба способа заблокированы политикой браузера — мгновенно включаем синтезатор
@@ -734,17 +852,24 @@ async function doSearch() {
 
   if (!resTracks || !resTracks.length) {
     const qLower = query.toLowerCase();
-    resTracks = SEED_CATALOG.filter(t => `${t.artist} ${t.title}`.toLowerCase().includes(qLower));
+    resTracks = SEED_CATALOG.filter(t => {
+      const full = `${t.artist} ${t.title}`.toLowerCase();
+      if (full.includes(qLower) || qLower.includes(t.title.toLowerCase()) || qLower.includes(t.artist.toLowerCase())) {
+        return true;
+      }
+      if (t.aliases && t.aliases.some(a => qLower.includes(a) || a.includes(qLower))) {
+        return true;
+      }
+      return false;
+    });
+
     if (!resTracks.length) {
       const match = SEED_CATALOG.find(t =>
-        qLower.includes(t.title.toLowerCase()) ||
-        qLower.includes(t.artist.toLowerCase()) ||
-        t.title.toLowerCase().includes(qLower) ||
-        t.artist.toLowerCase().includes(qLower)
+        t.aliases && t.aliases.some(a => qLower.includes(a) || a.includes(qLower))
       ) || SEED_CATALOG[0];
 
       resTracks = [{
-        id: 999,
+        id: match.id,
         artist: match.artist,
         title: match.title,
         duration_sec: match.duration_sec,
@@ -836,6 +961,8 @@ async function init() {
   }
 
   await select("wave");
+  // Фоновая предзагрузка первых буферов аудио в Web Audio для нулевой задержки старта
+  SEED_CATALOG.slice(0, 4).forEach(t => loadAudioBuffer(t.audio_url).catch(() => {}));
 }
 
 init().catch(showError);

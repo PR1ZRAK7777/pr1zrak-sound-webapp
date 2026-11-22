@@ -15,9 +15,9 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
   function syncCanvasSize() {
     if (!auraCanvas || !aCtx) return;
     const rect = auraCanvas.getBoundingClientRect();
-    const displaySize = Math.round(rect.width) || 320;
+    const size = Math.round(Math.min(rect.width, rect.height)) || 320;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const pixelSize = Math.round(displaySize * dpr);
+    const pixelSize = Math.round(size * dpr);
     if (auraCanvas.width !== pixelSize || auraCanvas.height !== pixelSize) {
       auraCanvas.width = pixelSize;
       auraCanvas.height = pixelSize;
@@ -28,20 +28,39 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
 
   syncCanvasSize();
   window.addEventListener("resize", syncCanvasSize);
+  if (typeof ResizeObserver !== "undefined" && auraCanvas) {
+    try {
+      const ro = new ResizeObserver(() => syncCanvasSize());
+      ro.observe(auraCanvas);
+    } catch (_) {}
+  }
 
-  // Система 160 монохромных светящихся флюидных частиц-искр
-  const PARTICLE_COUNT = 160;
+  // Система 160 монохромных светящихся флюидных частиц-искр (80 строго симметричных пар)
+  const PARTICLE_PAIRS = 80;
   const particles = [];
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const angle = (i / PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.1;
+  for (let i = 0; i < PARTICLE_PAIRS; i++) {
+    const baseAngle = (i / PARTICLE_PAIRS) * Math.PI * 2;
+    const offset = (Math.random() - 0.5) * 16;
+    const angVel = (Math.random() - 0.5) * 0.015;
+    const sz = 0.8 + Math.random() * 1.8;
+    const al = 0.35 + Math.random() * 0.65;
     particles.push({
-      angle,
-      dist: 82 + (Math.random() - 0.5) * 20,
-      baseOffset: (Math.random() - 0.5) * 20,
+      angle: baseAngle,
+      dist: 72 + offset,
+      baseOffset: offset,
       radialVel: 0,
-      angularVel: (Math.random() - 0.5) * 0.018,
-      size: 0.8 + Math.random() * 2.0,
-      alpha: 0.35 + Math.random() * 0.65
+      angularVel: angVel,
+      size: sz,
+      alpha: al
+    });
+    particles.push({
+      angle: baseAngle + Math.PI,
+      dist: 72 + offset,
+      baseOffset: offset,
+      radialVel: 0,
+      angularVel: angVel,
+      size: sz,
+      alpha: al
     });
   }
 
@@ -113,15 +132,16 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       aCtx.clearRect(0, 0, VIRTUAL_SIZE, VIRTUAL_SIZE);
 
       // ДИНАМИЧЕСКИЙ РАДИУС АУРЫ: УВЕЛИЧИВАЕТСЯ ПОД БИТ!
-      // В покое: 78px, при сильном басе: 112px (+43% расширение)
-      const baseRadius = 78;
-      const currentRadius = baseRadius + smoothedBass * 34;
-      const ribbonWidth = 24 + smoothedBass * 16;
+      // В покое: 68px, при сильном басе: 96px (+41% расширение)
+      // Гарантирует абсолютную центровку и достаточный запас до краев Canvas (340x340)
+      const baseRadius = 68;
+      const currentRadius = baseRadius + smoothedBass * 28;
+      const ribbonWidth = 22 + smoothedBass * 12;
 
       // А. Фоновое мягкое неоновое свечение (Smoky White Bloom)
       // Внутри радиуса пустота, свечение снаружи
       const innerVoidR = Math.max(12, currentRadius * 0.45);
-      const outerBloomR = currentRadius * 1.5;
+      const outerBloomR = Math.min(160, currentRadius * 1.48);
       const glowGrad = aCtx.createRadialGradient(cx, cy, innerVoidR, cx, cy, outerBloomR);
       glowGrad.addColorStop(0, "rgba(0, 0, 0, 0)");
       glowGrad.addColorStop(0.35, `rgba(255, 255, 255, ${0.04 + smoothedBass * 0.09})`);
@@ -145,7 +165,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         for (let r = 0; r < rayCount; r++) {
           const rayAngle = (r / rayCount) * Math.PI * 2 + beatPhase * 0.06;
           const rInner = currentRadius + ribbonWidth * 0.38;
-          const rOuter = currentRadius + ribbonWidth * 0.48 + 8 + smoothedBass * 32;
+          const rOuter = Math.min(156, currentRadius + ribbonWidth * 0.48 + 6 + smoothedBass * 24);
           aCtx.beginPath();
           aCtx.moveTo(cx + Math.cos(rayAngle) * rInner, cy + Math.sin(rayAngle) * rInner);
           aCtx.lineTo(cx + Math.cos(rayAngle) * rOuter, cy + Math.sin(rayAngle) * rOuter);
@@ -246,12 +266,12 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       aCtx.restore();
 
       // Д. Тёмная сердцевина ауры (Dark Void Core): глубокий космический чёрный центр
-      // Гарантирует абсолютную чистоту центра без плеера и винила
-      const coreVoidRadius = currentRadius - ribbonWidth * 0.56;
+      // Гарантирует абсолютную чистоту центра без плеера и винила (полная прозрачность/чернота)
+      const coreVoidRadius = currentRadius - ribbonWidth * 0.55;
       if (coreVoidRadius > 10) {
         aCtx.save();
         aCtx.globalCompositeOperation = "destination-out";
-        aCtx.fillStyle = "rgba(0, 0, 0, 0.96)";
+        aCtx.fillStyle = "#000000";
         aCtx.beginPath();
         aCtx.arc(cx, cy, coreVoidRadius, 0, Math.PI * 2);
         aCtx.fill();

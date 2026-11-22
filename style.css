@@ -184,8 +184,10 @@ nav button {
 
 .aura-container {
   position: relative;
-  width: min(80vw, 320px);
-  height: min(80vw, 320px);
+  width: min(78vw, 300px);
+  height: min(78vw, 300px);
+  max-width: 300px;
+  max-height: 300px;
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   display: flex;
@@ -213,7 +215,6 @@ nav button {
   height: 100%;
   display: block;
   pointer-events: none;
-  border-radius: 50%;
 }
 
 /* ────────────────── ИНФОРМАЦИЯ О ТРЕКЕ ────────────────── */
