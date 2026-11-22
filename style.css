@@ -1,132 +1,327 @@
 :root {
   color-scheme: dark;
-  background: #0b0b0f;
-  color: #e2e8f0;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #24242a 0%, #121216 45%, #070709 100%);
+  --panel-bg: rgba(22, 22, 27, 0.75);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+
+  /* Динамические цвета ауры */
+  --aura-hue: 275deg;
+  --aura-primary: hsl(var(--aura-hue), 90%, 62%);
+  --aura-secondary: hsl(calc(var(--aura-hue) + 40deg), 95%, 52%);
+  --aura-scale: 1;
+
   font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
 * { box-sizing: border-box; }
-body { margin: 0; background: #0b0b0f; }
-main { max-width: 440px; margin: auto; padding: 14px 16px 40px; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  max-width: 440px;
+  width: 100%;
+  margin: auto;
+  padding: 14px 16px 40px;
+}
+
+/* ────────────────── КНОПКИ И НАВИГАЦИЯ (ЧЕРНО-БЕЛЫЙ ГРАДИЕНТ) ────────────────── */
 button {
-  background: #1c1a24;
-  color: inherit;
-  border: 0;
+  background: linear-gradient(180deg, #26262e 0%, #15151a 100%);
+  color: var(--text-primary);
+  border: 1px solid var(--panel-border);
   border-radius: 12px;
   min-height: 42px;
   padding: 0 13px;
   cursor: pointer;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-button:focus-visible { outline: 2px solid #8feaff; }
-button[aria-pressed=true], #play { background: #9333ea; color: white; }
-nav, .controls { display: flex; gap: 6px; justify-content: space-between; }
-nav button { flex: 1; font-size: 13px; min-height: 38px; }
-.art { display: grid; place-items: center; padding: 16px 0 12px; }
-#sleeve {
-  width: min(58vw, 240px);
-  aspect-ratio: 1;
-  border-radius: 22px;
-  background: repeating-radial-gradient(circle at center, #20202b 0 3px, #484154 4px 5px);
-  box-shadow: 0 0 35px rgba(147, 51, 234, 0.45);
-  overflow: hidden;
-  position: relative;
-  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
+
+button:hover {
+  background: linear-gradient(180deg, #30303a 0%, #1c1c22 100%);
+  border-color: rgba(255, 255, 255, 0.22);
 }
-#sleeve::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 3px;
-  background: conic-gradient(from -90deg, #85edff 0deg, #ce9cff var(--progress, 0deg), transparent var(--progress, 0deg));
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
+
+button:active {
+  transform: scale(0.97);
 }
-#cover { width: 100%; height: 100%; object-fit: cover; animation: fade .3s; }
-@keyframes fade { from { opacity: 0; } }
-canvas { display: block; width: 100%; height: 42px; margin: 4px 0; }
-h1 { font-size: 22px; margin: 8px 0 2px; text-align: center; font-weight: 700; }
-p#artist { margin: 2px 0 4px; color: #a78bfa; text-align: center; font-size: 14px; }
-p#status { margin: 2px 0 6px; color: #948da6; text-align: center; font-size: 12px; min-height: 16px; }
-input { width: 100%; accent-color: #a855f7; }
-output { font-weight: 500; }
+
+button:focus-visible {
+  outline: 2px solid #ffffff;
+}
+
+button[aria-pressed=true], #play {
+  background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
+  color: #09090b;
+  border-color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+}
+
+nav, .controls {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+nav button {
+  flex: 1;
+  font-size: 13px;
+  min-height: 38px;
+}
+
+/* ────────────────── ПОИСК И ГРОМКОСТЬ (MONOCHROME GLASS) ────────────────── */
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.search-bar input {
+  flex: 1;
+  background: rgba(18, 18, 23, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 9px 13px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-bar input:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.15);
+}
+
+.search-bar button {
+  background: linear-gradient(135deg, #ffffff 0%, #d4d4d8 100%);
+  color: #09090b;
+  border: 0;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0 15px;
+}
+
 .top-volume {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 8px 0 6px;
   padding: 6px 14px;
-  background: #171520;
+  background: rgba(20, 20, 25, 0.85);
   border-radius: 12px;
-  border: 1px solid #2e2a3c;
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(8px);
 }
-.top-volume span { font-size: 13px; color: #a78bfa; font-weight: 600; min-width: 55px; }
-.top-volume input { flex: 1; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 8px; }
-.search-bar input {
-  flex: 1;
-  background: #171520;
-  border: 1px solid #2e2a3c;
-  border-radius: 12px;
-  padding: 9px 13px;
-  color: #e2e8f0;
-  font-size: 14px;
-  outline: none;
-}
-.search-bar input:focus { border-color: #a855f7; box-shadow: 0 0 12px rgba(168,85,247,0.35); }
-.search-bar button {
-  background: linear-gradient(135deg, #9333ea, #7c3aed);
-  color: #fff;
-  border: 0;
-  border-radius: 12px;
-  padding: 0 14px;
-  font-weight: 600;
+
+.top-volume span {
   font-size: 13px;
-  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+  min-width: 55px;
 }
+
+.top-volume input {
+  flex: 1;
+  accent-color: #ffffff;
+}
+
+/* ────────────────── ВИНИЛОВАЯ ПЛАСТИНКА И АУРА ────────────────── */
+.art {
+  display: grid;
+  place-items: center;
+  padding: 18px 0 12px;
+  position: relative;
+}
+
+.aura-container {
+  position: relative;
+  width: min(58vw, 240px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+/* Живая неоновая аура (пульсирует под биты и меняет цвета) */
+.aura-glow {
+  position: absolute;
+  inset: -22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, var(--aura-primary) 0%, var(--aura-secondary) 40%, transparent 72%);
+  filter: blur(28px);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 1;
+  transform: scale(var(--aura-scale, 1));
+  transition: transform 0.08s ease-out, opacity 0.15s ease, background 0.8s ease;
+}
+
+#sleeve {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle at center, #18181c 0 3px, #272730 4px 5px);
+  box-shadow: 0 0 35px var(--aura-primary), inset 0 0 25px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  z-index: 2;
+  transition: transform 0.08s ease-out, box-shadow 0.4s ease;
+  animation: vinyl-spin 20s linear infinite;
+  animation-play-state: paused;
+}
+
+body.playing #sleeve {
+  animation-play-state: running;
+}
+
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#sleeve::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from -90deg, #ffffff 0deg, var(--aura-primary) var(--progress, 0deg), transparent var(--progress, 0deg));
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+#cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: fade .3s;
+}
+
+@keyframes fade { from { opacity: 0; } }
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin: 4px 0;
+}
+
+/* ────────────────── ИНФОРМАЦИЯ О ТРЕКЕ ────────────────── */
+h1 {
+  font-size: 22px;
+  margin: 8px 0 2px;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+p#artist {
+  margin: 2px 0 4px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 14px;
+}
+
+p#status {
+  margin: 2px 0 6px;
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: 12px;
+  min-height: 16px;
+}
+
+input {
+  width: 100%;
+  accent-color: #ffffff;
+}
+
+output { font-weight: 500; font-variant-numeric: tabular-nums; }
+
 .seek-container { margin: 6px 0 4px; }
-.time-row { display: flex; justify-content: space-between; font-size: 12px; color: #948da6; margin-bottom: 3px; }
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+}
+
 .controls { margin-top: 4px; }
 .controls button { font-size: 17px; }
+
+/* ────────────────── КНОПКА СКАЧАТЬ В TELEGRAM ────────────────── */
 .dl-container { margin: 12px 0 12px; }
 .dl-btn {
   width: 100%;
-  min-height: 44px;
-  background: linear-gradient(135deg, #9333ea, #ec4899);
-  color: #fff;
+  min-height: 46px;
+  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+  color: #09090b;
   border-radius: 14px;
   font-weight: 700;
   font-size: 13.5px;
-  box-shadow: 0 4px 18px rgba(147, 51, 234, 0.4);
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.22);
   letter-spacing: 0.2px;
+  border: 0;
 }
+
 .dl-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(236, 72, 153, 0.5);
+  box-shadow: 0 6px 24px rgba(255, 255, 255, 0.35);
 }
-h2#list-title { font-size: 16px; margin: 14px 0 8px; color: #d8b4fe; font-weight: 600; }
+
+/* ────────────────── ОЧЕРЕДЬ ТРЕКОВ ────────────────── */
+h2#list-title {
+  font-size: 15px;
+  margin: 14px 0 8px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 ol#queue { padding: 0; margin: 0; list-style: none; }
 li.track-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #15131e;
-  border: 1px solid #232030;
+  background: rgba(18, 18, 23, 0.7);
+  border: 1px solid var(--panel-border);
   border-radius: 12px;
   margin-bottom: 6px;
   padding: 4px 6px 4px 10px;
-  transition: background 0.15s;
+  transition: all 0.15s ease;
 }
-li.track-row:hover { background: #1f1b2c; }
-li.track-row.active { border-color: #8feaff; background: #221a36; }
+
+li.track-row:hover {
+  background: rgba(28, 28, 35, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+li.track-row.active {
+  border-color: #ffffff;
+  background: rgba(35, 35, 45, 0.95);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+}
+
 .track-info-btn {
   flex: 1;
   text-align: left;
   background: transparent;
+  border: 0;
+  box-shadow: none;
   min-height: 38px;
   padding: 0;
   font-size: 13px;
@@ -135,14 +330,25 @@ li.track-row.active { border-color: #8feaff; background: #221a36; }
   text-overflow: ellipsis;
   border-radius: 0;
   cursor: pointer;
+  color: var(--text-primary);
 }
+
+.track-info-btn:hover {
+  background: transparent;
+}
+
 .track-dl-icon {
-  background: #25232d;
+  background: linear-gradient(180deg, #2a2a32 0%, #18181e 100%);
   min-height: 32px;
   min-width: 32px;
   padding: 0 8px;
   border-radius: 8px;
   font-size: 13px;
-  color: #a78bfa;
+  color: #ffffff;
+  border: 1px solid var(--panel-border);
 }
-.track-dl-icon:hover { background: #9333ea; color: #fff; }
+
+.track-dl-icon:hover {
+  background: #ffffff;
+  color: #09090b;
+}

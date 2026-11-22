@@ -27,16 +27,19 @@
   </header>
 
   <section class="art">
-    <div id="sleeve">
-      <img id="cover" alt="" hidden>
+    <div class="aura-container">
+      <div id="aura-glow" class="aura-glow"></div>
+      <div id="sleeve">
+        <img id="cover" alt="" hidden>
+      </div>
     </div>
   </section>
-  <canvas id="spectrum" width="384" height="52" aria-hidden="true"></canvas>
+  <canvas id="spectrum" width="384" height="48" aria-hidden="true"></canvas>
 
   <h1 id="title">Загрузка музыки…</h1>
   <p id="artist">ПРИЗРАК</p>
   <p id="status" role="status"></p>
-  <audio id="audio" preload="auto"></audio>
+  <audio id="audio" preload="auto" playsinline></audio>
 
   <div class="seek-container">
     <div class="time-row">
