@@ -8,10 +8,11 @@
   <meta http-equiv="Expires" content="0">
   <meta name="player-api" content="">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=26">
+  <link rel="stylesheet" href="./style.css?v=27">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body class="access-locked">
+<div id="cover-backdrop" aria-hidden="true"></div>
 <main inert>
   <header class="app-header">
 
@@ -32,6 +33,20 @@
       </button>
       <input id="volume" type="range" min="0" max="100" value="100" aria-label="Громкость">
     </div>
+    <details class="appearance" id="appearance-panel">
+      <summary>✦ Оформление</summary>
+      <div class="appearance-options">
+        <label>Цвет ауры<select id="aura-color" aria-label="Цвет ауры">
+          <option value="white">Белый</option><option value="purple">Фиолетовый</option>
+          <option value="blue">Синий</option><option value="red">Красный</option>
+          <option value="auto">Авто · по обложке</option>
+        </select></label>
+        <label>Фон<select id="player-background" aria-label="Фон"><option value="black">Чёрный</option><option value="cover">Размытая обложка</option></select></label>
+        <label>Интенсивность<select id="aura-intensity" aria-label="Интенсивность"><option value="bright">Яркая</option><option value="calm">Спокойная</option></select></label>
+        <button id="appearance-reset" type="button">Сбросить оформление</button>
+        <p>Сохраняется на этом устройстве. Аура реагирует на громкость и басы.</p>
+      </div>
+    </details>
   </header>
 
   <section class="art">
@@ -163,6 +178,6 @@
     <a class="access-return" href="https://t.me/PR1ZRAKWORK_BOT">Вернуться в бот</a>
   </div>
 </section>
-<script type="module" src="./app.js?v=26"></script>
+<script type="module" src="./app.js?v=27"></script>
 </body>
 </html>

@@ -76,6 +76,8 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
   let externalTimeGetter = null;
   let volume = 1;
   let visualVolume = 1;
+  let rgb = "255, 255, 255";
+  let intensity = 1;
 
   function renderFrame(now) {
     const dt = Math.min((now - prevTime) / 1000, 0.1);
@@ -122,8 +124,8 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
     }
 
     if (reduce.matches) bass = treble = 0;
-    bass *= visualVolume;
-    treble *= visualVolume;
+    bass *= visualVolume * intensity;
+    treble *= visualVolume * intensity;
     // Плавное сглаживание: мгновенная атака удара, плавный спад
     if (bass > smoothedBass) {
       smoothedBass += (bass - smoothedBass) * 0.82; // взрывная атака
@@ -155,9 +157,9 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       const outerBloomR = Math.min(160, currentRadius * 1.48);
       const glowGrad = aCtx.createRadialGradient(cx, cy, innerVoidR, cx, cy, outerBloomR);
       glowGrad.addColorStop(0, "rgba(0, 0, 0, 0)");
-      glowGrad.addColorStop(0.35, `rgba(255, 255, 255, ${0.04 + smoothedBass * 0.09})`);
-      glowGrad.addColorStop(0.68, `rgba(230, 238, 255, ${0.07 + smoothedBass * 0.17})`);
-      glowGrad.addColorStop(0.92, `rgba(180, 195, 220, ${0.02 + smoothedBass * 0.06})`);
+      glowGrad.addColorStop(0.35, `rgba(${rgb}, ${0.04 + smoothedBass * 0.09})`);
+      glowGrad.addColorStop(0.68, `rgba(${rgb}, ${0.07 + smoothedBass * 0.17})`);
+      glowGrad.addColorStop(0.92, `rgba(${rgb}, ${0.02 + smoothedBass * 0.06})`);
       glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
       aCtx.save();
       aCtx.fillStyle = glowGrad;
@@ -171,10 +173,10 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         const rayCount = 32;
         aCtx.save();
         const rayAlpha = Math.min(0.85, (smoothedBass - 0.20) * 1.15);
-        aCtx.strokeStyle = `rgba(255, 255, 255, ${rayAlpha})`;
+        aCtx.strokeStyle = `rgba(${rgb}, ${rayAlpha})`;
         aCtx.lineWidth = 1.1;
         aCtx.shadowBlur = 8;
-        aCtx.shadowColor = "#ffffff";
+        aCtx.shadowColor = `rgb(${rgb})`;
         for (let r = 0; r < rayCount; r++) {
           const rayAngle = (r / rayCount) * Math.PI * 2 + beatPhase * 0.06;
           const rInner = currentRadius + ribbonWidth * 0.38;
@@ -198,9 +200,9 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         let layerAlpha = (1.0 - Math.abs(v) * 1.1) * (0.45 + smoothedBass * 0.55);
         layerAlpha = Math.max(0.12, Math.min(1.0, layerAlpha));
 
-        const baseFill = isCore ? `rgba(255, 255, 255, ${layerAlpha})` : `rgba(225, 230, 242, ${layerAlpha * 0.8})`;
+        const baseFill = isCore ? `rgba(${rgb}, ${layerAlpha})` : `rgba(${rgb}, ${layerAlpha * 0.8})`;
         aCtx.fillStyle = baseFill;
-        aCtx.globalAlpha = 0.25 + visualVolume * 0.75;
+        aCtx.globalAlpha = (0.25 + visualVolume * 0.75) * (0.55 + intensity * 0.45);
 
         for (let p = 0; p < POINTS_PER_BAND; p++) {
           const u = (p / POINTS_PER_BAND) * Math.PI * 2;
@@ -238,7 +240,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       // Г. Отрисовка флюидных монохромных частиц-искр (Blooming Sparks)
       aCtx.save();
       aCtx.shadowBlur = 6;
-      aCtx.shadowColor = "#ffffff";
+      aCtx.shadowColor = `rgb(${rgb})`;
       for (let i = 0; i < particles.length; i++) {
         const pt = particles[i];
         if (!reduce.matches) pt.angle += pt.angularVel + (smoothedBass * 0.007);
@@ -259,8 +261,8 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         const py = cy + Math.sin(pt.angle) * pt.dist;
 
         const pAlpha = Math.min(1.0, pt.alpha * (0.65 + smoothedBass * 0.65));
-        aCtx.globalAlpha = 0.25 + visualVolume * 0.75;
-        aCtx.fillStyle = `rgba(255, 255, 255, ${pAlpha})`;
+        aCtx.globalAlpha = (0.25 + visualVolume * 0.75) * (0.55 + intensity * 0.45);
+        aCtx.fillStyle = `rgba(${rgb}, ${pAlpha})`;
         aCtx.beginPath();
         aCtx.arc(px, py, pt.size * (1 + smoothedBass * 0.35), 0, Math.PI * 2);
         aCtx.fill();
@@ -270,7 +272,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
           const tailLen = 3 + smoothedBass * 8;
           const tx = px + Math.cos(pt.angle) * tailLen;
           const ty = py + Math.sin(pt.angle) * tailLen;
-          aCtx.strokeStyle = `rgba(255, 255, 255, ${pAlpha * 0.55})`;
+          aCtx.strokeStyle = `rgba(${rgb}, ${pAlpha * 0.55})`;
           aCtx.lineWidth = 0.8;
           aCtx.beginPath();
           aCtx.moveTo(px, py);
@@ -320,7 +322,12 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       if (timeGetter) externalTimeGetter = timeGetter;
       startLoop();
     },
-    setHue: () => {}, // Строго монохромный режим: оттенки не требуются
+    setAppearance: (color, level) => {
+      if (Array.isArray(color) && color.length === 3 && color.every(n => Number.isFinite(n) && n >= 0 && n <= 255))
+        rgb = color.map(Math.round).join(", ");
+      intensity = level === "calm" ? 0.55 : 1;
+      startLoop();
+    },
     start: async function (externalAudioCtx = null, externalAnalyser = null) {
       if (externalAudioCtx) ctx = externalAudioCtx;
       if (externalAnalyser) analyser = externalAnalyser;

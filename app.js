@@ -1,7 +1,8 @@
-import {API_BASE, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=26";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=26";
-import {makeVisualizer} from "./visualizer.js?v=26";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=26";
+import {createAppearance} from "./appearance.js?v=27";
+import {API_BASE, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=27";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=27";
+import {makeVisualizer} from "./visualizer.js?v=27";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=27";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -11,6 +12,7 @@ const audio = el("audio");
 const auraCanvas = el("aura-canvas");
 const auraWrapper = el("aura-wrapper");
 const visualizer = makeVisualizer(auraCanvas);
+const appearance = createAppearance(visualizer);
 
 const getAssetUrl = path => path.endsWith(".mp3") && API_BASE
   ? API_BASE + "/api/assets/" + path.split("/").pop() : new URL(path, import.meta.url).href;
@@ -693,6 +695,7 @@ function render() {
   el("queue").hidden = locked;
   el("list-title").hidden = locked;
   const t = current();
+  appearance.setCover(t?.cover_url || DEFAULT_COVER);
   el("like").disabled = !t;
   el("title").textContent = t ? t.title : (list === "favorites" ? "Мои треки" : "ПРИЗРАК");
   el("artist").textContent = t ? t.artist : (list === "favorites" ? "Любимая музыка" : "PR1ZRAK Sound");

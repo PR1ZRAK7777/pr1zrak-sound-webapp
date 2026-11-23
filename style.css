@@ -140,7 +140,7 @@ nav button {
   box-shadow: 0 0 26px rgba(255, 255, 255, 0.85);
 }
 
-/* Player assets v26 */
+/* Player assets v27 */
 .app-header { position: relative; padding-top: 0; }
 .top-volume { position: relative; width: fit-content; margin-top: 10px; min-height: 36px; display: flex; align-items: center; gap: 8px; z-index: 3; }
 .top-volume .vol-icon { width: 36px; min-height: 36px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-secondary); }
@@ -542,3 +542,16 @@ body.access-locked main { filter: blur(9px); opacity: .45; pointer-events: none;
 .access-card p { color: #b6b8c0; line-height: 1.6; }
 .access-action { display: block; padding: 14px; margin: 20px 0; border-radius: 12px; color: #000; background: #fff; text-decoration: none; font-weight: 700; }
 .access-return { display: block; margin-top: 18px; color: #aeb0ba; text-decoration: none; }
+
+/* Personal appearance: readable controls and a decorative, non-interactive backdrop. */
+#cover-backdrop { position:fixed; inset:-40px; z-index:0; pointer-events:none; background-position:center; background-size:cover; filter:blur(36px); opacity:0; transition:opacity .4s; }
+#cover-backdrop.visible { opacity:.23; }
+main { position:relative; z-index:1; }
+.appearance { margin:8px 0 0; color:var(--text-secondary); font-size:13px; }
+.appearance summary { cursor:pointer; width:fit-content; padding:8px 10px; border:1px solid var(--panel-border); border-radius:12px; background:rgba(14,14,18,.8); }
+.appearance-options { margin-top:10px; padding:14px; display:grid; gap:12px; border:1px solid var(--panel-border); border-radius:16px; background:rgba(14,14,18,.94); }
+.appearance-options label { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:10px; align-items:center; }
+.appearance-options select { width:100%; min-height:38px; color:#fff; background:#17171d; border:1px solid #454550; border-radius:9px; padding:5px; font:inherit; }
+.appearance-options p { margin:0; line-height:1.5; font-size:12px; }
+.appearance-options button { min-height:38px; font-size:13px; }
+@media (prefers-reduced-motion:reduce) { #cover-backdrop { transition:none; } }
