@@ -1,9 +1,11 @@
-import {appendWaveBatch, discoveryContext, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=18";
-import {makeVisualizer} from "./visualizer.js?v=14";
+import {appendWaveBatch, discoveryContext, waveProgress, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=20";
+import {makeVisualizer} from "./visualizer.js?v=20";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=20";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
 const uid = tg?.initDataUnsafe?.user?.id || 0;
+const USE_BOT_API = document.documentElement.dataset.botApi === "true";
 const audio = el("audio");
 const auraCanvas = el("aura-canvas");
 const auraWrapper = el("aura-wrapper");
@@ -146,6 +148,7 @@ function resolveTrackAudio(track) {
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
 let masterGain = null;
+let mediaElementSource = null;
 let analyser = null;
 let currentVolume = 1.0;
 
@@ -162,6 +165,9 @@ function ensureAudioContext() {
 
       masterGain.connect(analyser);
       analyser.connect(audioCtx.destination);
+      audio.crossOrigin = "anonymous";
+      mediaElementSource = audioCtx.createMediaElementSource(audio);
+      mediaElementSource.connect(masterGain);
 
       visualizer.start(audioCtx, analyser);
     } catch (_) {}
@@ -491,6 +497,11 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
 
 /* ────────────────── СОСТОЯНИЕ ПЛЕЕРА И КАТАЛОГА ────────────────── */
 let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, objectURL = null, refilling = false;
+let libraryTracks = [];
+const libraryStore = createLibraryStore(tg?.CloudStorage, localStorage, uid);
+const savedTrack = t => t && libraryTracks.find(saved =>
+  saved.artist.trim().toLowerCase() === t.artist.trim().toLowerCase() &&
+  saved.title.trim().toLowerCase() === t.title.trim().toLowerCase());
 let repeatMode = "off"; // "off" | "all" | "one"
 let isShuffle = false;
 const recentPlayed = new Set();
@@ -499,7 +510,7 @@ function waveContext() {
   let history = [];
   try { history = JSON.parse(localStorage.getItem("pr1zrak_history") || "[]"); } catch (_) {}
   if (!Array.isArray(history)) history = [];
-  for (const t of tracks) knownWaveTracks.set(t.id, t);
+  for (const t of [...tracks, ...libraryTracks]) knownWaveTracks.set(t.id, t);
   const context = discoveryContext([...knownWaveTracks.values()], history, recentPlayed, liked);
   try {
     const saved = JSON.parse(localStorage.getItem("pr1zrak_listened_artists") || "[]");
@@ -618,12 +629,19 @@ function updateShuffleIcon(active) {
 }
 
 function render() {
+  const progress = waveProgress(libraryTracks);
+  const locked = list === "wave" && !progress.unlocked;
+  el("wave-locked").hidden = !locked;
+  el("wave-progress").value = Math.min(30, progress.count);
+  el("wave-progress-text").textContent = `Собрано ${progress.count}/30 треков для обучения Волны. Осталось ${progress.remaining}.`;
+  el("queue").hidden = locked;
+  el("list-title").hidden = locked;
   const t = current();
   el("like").disabled = !t;
   el("title").textContent = t ? t.title : (list === "favorites" ? "Мои треки" : "ПРИЗРАК");
   el("artist").textContent = t ? t.artist : (list === "favorites" ? "Любимая музыка" : "PR1ZRAK Sound");
 
-  const isLiked = Boolean(t && liked.has(t.id));
+  const isLiked = Boolean(savedTrack(t));
   updateLikeIcon(isLiked);
   el("like").setAttribute("aria-pressed", String(isLiked));
 
@@ -662,7 +680,13 @@ function render() {
     trackDur.className = "track-duration-text";
     trackDur.textContent = track.is_preview ? `${clock(track.full_duration_sec || 180)} (превью)` : clock(track.duration_sec);
 
-    li.append(infoSpan, trackDur);
+    const download = document.createElement("button");
+    download.className = "track-download";
+    download.textContent = "↓";
+    download.setAttribute("aria-label", `Скачать ${track.artist} — ${track.title}`);
+    download.onclick = e => { e.stopPropagation(); triggerDirectDownload(track).catch(showError); };
+    download.onkeydown = e => e.stopPropagation();
+    li.append(infoSpan, trackDur, download);
 
     // Клик по любому месту строки трека мгновенно запускает воспроизведение
     li.onclick = () => play(i).catch(showError);
@@ -682,7 +706,7 @@ async function refill() {
   const r = revision;
   refilling = true;
   try {
-    const res = await api(`wave/${uid}?limit=5`);
+    const res = USE_BOT_API ? await api(`wave/${uid}?limit=5`) : null;
     if (res) {
       let extra = await res.json();
       for (const t of extra) knownWaveTracks.set(t.id, t);
@@ -776,7 +800,7 @@ async function play(i) {
   unlockAudioEngine();
 
   let streamSrc = resolveTrackAudio(selected);
-  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+  const isGitHubPages = !USE_BOT_API;
 
   if (!isGitHubPages) {
     try {
@@ -793,7 +817,7 @@ async function play(i) {
 
   if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если пользователь скипнул!
   if (!streamSrc) {
-    el("status").textContent = "Аудио этого трека недоступно.";
+    el("status").textContent = "Для трека нет публичного MP3. Аудиофайл доступен в чате бота.";
     return;
   }
 
@@ -822,7 +846,7 @@ async function play(i) {
         }
       };
       audio.src = streamSrc;
-      audio.volume = currentVolume;
+      audio.volume = mediaElementSource ? 1 : currentVolume;
       audio.muted = false;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -846,7 +870,7 @@ async function play(i) {
   }
 
   if (selected && selected.is_preview) {
-    el("status").textContent = "⚡ Превью 30с • Нажмите 📥 для полной версии 320 kbps";
+    el("status").textContent = "Превью 30 секунд • Полную версию можно найти в боте";
   } else {
     el("status").textContent = "";
   }
@@ -977,6 +1001,11 @@ async function select(name) {
   refilling = false;
   render();
 
+  if (name === "wave" && !waveProgress(libraryTracks).unlocked) {
+    el("status").textContent = "Соберите 30 любимых треков, чтобы открыть Волну";
+    return;
+  }
+
   const tabSearch = el("tab-search");
   if (name !== "search" && tabSearch) tabSearch.style.display = "none";
   for (const b of document.querySelectorAll("[data-list]")) {
@@ -989,7 +1018,7 @@ async function select(name) {
   }
 
   let result = null;
-  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+  const isGitHubPages = !USE_BOT_API;
 
   if (!isGitHubPages) {
     const res = await api(name === "top" ? "top" : `${name}/${uid}`);
@@ -1003,7 +1032,7 @@ async function select(name) {
   if (!result || !result.length) {
     if (name === "favorites") {
       // У нового пользователя в "Моих треках" ИЗНАЧАЛЬНО 0 ТРЕКОВ!
-      result = SEED_CATALOG.filter(t => liked.has(t.id));
+      result = [...libraryTracks];
     } else if (name === "top") {
       result = [...SEED_CATALOG];
     } else {
@@ -1161,15 +1190,35 @@ el("seek").oninput = e => {
 
 el("volume").oninput = e => {
   currentVolume = e.target.value / 100;
-  audio.volume = currentVolume;
+  audio.volume = mediaElementSource ? 1 : currentVolume;
   if (masterGain && audioCtx) {
     masterGain.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
   }
   synth.setVolume(currentVolume);
-  el("volumeLabel").textContent = Math.round(currentVolume * 100) + "%";
+  visualizer.setVolume(currentVolume);
+  try { localStorage.setItem("pr1zrak_volume", String(currentVolume)); } catch (_) {}
 };
-currentVolume = 1.0;
-audio.volume = 1.0;
+try { currentVolume = Math.max(0, Math.min(1, Number(localStorage.getItem("pr1zrak_volume") ?? 1) || 0)); } catch (_) {}
+audio.volume = mediaElementSource ? 1 : currentVolume;
+el("volume").value = currentVolume * 100;
+visualizer.setVolume(currentVolume);
+el("volume-toggle").onclick = () => {
+  const open = document.querySelector(".top-volume").classList.toggle("open");
+  el("volume-toggle").setAttribute("aria-expanded", String(open));
+};
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest(".top-volume")) {
+    document.querySelector(".top-volume").classList.remove("open");
+    el("volume-toggle").setAttribute("aria-expanded", "false");
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    document.querySelector(".top-volume").classList.remove("open");
+    el("volume-toggle").setAttribute("aria-expanded", "false");
+    if (document.activeElement === el("volume")) el("volume").blur();
+  }
+});
 
 
 const searchInput = el("search-input");
@@ -1206,7 +1255,7 @@ async function doSearch() {
   }
 
   let resTracks = null;
-  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+  const isGitHubPages = !USE_BOT_API;
 
   if (!isGitHubPages) {
     try {
@@ -1258,7 +1307,8 @@ async function doSearch() {
   // Объединяем: локальные студийные треки с наивысшим приоритетом + все результаты глобального поиска
   const seen = new Set();
   const merged = [];
-  for (const t of [...(resTracks || []), ...localMatches, ...globalTracks]) {
+  for (const t of [...(resTracks || []), ...localMatches, ...libraryTracks.filter(t =>
+    words.every(w => `${t.artist} ${t.title}`.toLowerCase().includes(w))), ...globalTracks]) {
     const key = (String(t.artist || "") + " - " + String(t.title || "")).trim().toLowerCase();
     if (key && !seen.has(key)) {
       seen.add(key);
@@ -1283,19 +1333,28 @@ el("like").onclick = async () => {
   if (!t) return;
   el("like").disabled = true;
   try {
-    const was = liked.has(t.id);
-    const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+    const saved = savedTrack(t);
+    const was = Boolean(saved);
+    const isGitHubPages = !USE_BOT_API;
     if (!isGitHubPages) {
-      await api("like", {
+      const response = await api("like", {
         method: was ? "DELETE" : "POST",
         body: JSON.stringify({ id: t.id })
       });
+      if (!response) throw Error("Не удалось сохранить трек на сервере");
     }
-    if (was) liked.delete(t.id);
-    else liked.add(t.id);
+    const before = libraryTracks;
+    const updated = was ? libraryTracks.filter(track => track.id !== saved.id) : mergeLibrary(libraryTracks, [t]);
+    const removed = before.filter(track => !updated.some(item => item.id === track.id)).map(track => track.id);
+    libraryTracks = updated;
+    libraryStore.cache(libraryTracks);
+    try {
+      await libraryStore.save(was ? [] : [t], removed);
+    } catch (_) { showToast("Сохранено на устройстве. Облако недоступно — повторите позже."); }
+    liked = new Set(libraryTracks.map(track => track.id));
 
     try {
-      localStorage.setItem("pr1zrak_favs", JSON.stringify([...liked]));
+      localStorage.setItem(`pr1zrak_favs_${uid}`, JSON.stringify([...liked]));
     } catch (_) {}
 
     if (was && list === "favorites") {
@@ -1355,22 +1414,35 @@ function closeDownloadModal() {
   }
 }
 
-async function triggerDirectDownload() {
-  const t = current();
+async function triggerDirectDownload(track = null) {
+  const t = track?.id ? track : current();
   if (!t) return;
   closeDownloadModal();
 
-  const audioUrl = t.audio_url;
-  if (!audioUrl) {
-    showToast("⚠️ Аудиофайл пока недоступен");
+  const audioUrl = resolveTrackAudio(t);
+  if (t.is_preview) {
+    showToast("Это превью. Полную версию можно найти в боте.");
+    return;
+  }
+  if (!audioUrl && !Number.isInteger(t.id)) {
+    showToast("Для этого трека нет публичного MP3. Аудиофайл доступен в чате бота.", 4500);
     return;
   }
 
   showToast("⏳ Сохраняю аудиофайл...");
-  const cleanFilename = `${t.artist} - ${t.title}`.replace(/[\\/:*?"<>|#]/g, "_").trim() + ".mp3";
+  const extension = audioUrl ? new URL(audioUrl, location.href).pathname.match(/\.(mp3|m4a|ogg|wav)$/i)?.[0] || ".mp3" : ".mp3";
+  const cleanFilename = `${t.artist} - ${t.title}`.replace(/[\\/:*?"<>|#]/g, "_").trim() + extension;
+  if (audioUrl?.startsWith("https://") && tg?.downloadFile && tg.isVersionAtLeast?.("8.0") &&
+      ["android", "ios", "tdesktop", "macos"].includes(tg.platform)) {
+    try {
+      tg.downloadFile({url: audioUrl, file_name: cleanFilename}, accepted =>
+        showToast(accepted ? "Загрузка передана Telegram на устройстве" : "Скачивание отменено"));
+      return;
+    } catch (_) { /* Older clients use the browser download below. */ }
+  }
 
   try {
-    const response = await fetch(audioUrl);
+    const response = audioUrl ? await fetch(audioUrl) : await api("audio/" + t.id);
     if (!response.ok) throw new Error("fetch failed");
     const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
@@ -1381,16 +1453,9 @@ async function triggerDirectDownload() {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-    showToast("✅ Файл сохранён в Загрузки!");
+    showToast("Загрузка передана устройству");
   } catch (_) {
-    const a = document.createElement("a");
-    a.href = audioUrl;
-    a.download = cleanFilename;
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast("✅ Загрузка началась!");
+    showToast("Не удалось скачать файл. Проверьте соединение и повторите.", 4500);
   }
 }
 
@@ -1427,7 +1492,7 @@ function triggerTelegramDownload() {
 }
 
 const dlBtn = el("download-tg");
-if (dlBtn) dlBtn.onclick = openDownloadModal;
+if (dlBtn) dlBtn.onclick = () => triggerDirectDownload().catch(showError);
 
 el("modal-close")?.addEventListener("click", closeDownloadModal);
 el("dl-modal")?.addEventListener("click", e => {
@@ -1435,6 +1500,27 @@ el("dl-modal")?.addEventListener("click", e => {
 });
 el("btn-dl-device")?.addEventListener("click", triggerDirectDownload);
 el("btn-dl-telegram")?.addEventListener("click", triggerTelegramDownload);
+
+async function importLaunchTracks() {
+  try {
+    const imported = decodeHandoff(window.location.hash, uid);
+    if (imported.length) {
+      const before = libraryTracks;
+      libraryTracks = mergeLibrary(libraryTracks, imported);
+      libraryStore.cache(libraryTracks);
+      const removed = before.filter(t => !libraryTracks.some(item => item.id === t.id)).map(t => t.id);
+      const synced = await libraryStore.save(imported, removed);
+      if (synced) {
+        const fragment = new URLSearchParams(window.location.hash.slice(1));
+        fragment.delete("library");
+        history.replaceState(null, "", window.location.pathname + window.location.search + (fragment.size ? "#" + fragment : ""));
+      }
+      showToast(synced ? `Сохранено в Telegram: ${imported.length} треков` : "Треки сохранены на устройстве");
+    }
+  } catch (error) { showToast(error.message || "Не удалось сохранить импорт в облаке", 5000); }
+  liked = new Set(libraryTracks.map(t => t.id));
+
+}
 
 async function init() {
   if (tg) {
@@ -1444,16 +1530,31 @@ async function init() {
     if (tg.setBackgroundColor) tg.setBackgroundColor("#000000");
   }
 
+  const saved = await libraryStore.load();
+  libraryTracks = saved.tracks;
+  if (saved.error) showToast("Облако недоступно. Загружена копия с устройства.", 4000);
+  // Preserve the previous player's locally saved catalog favorites on upgrade.
   try {
-    const saved = localStorage.getItem("pr1zrak_favs");
-    if (saved) liked = new Set(JSON.parse(saved));
-  } catch (_) {}
+    const migrationKey = `pr1zrak_legacy_migrated_${uid}`;
+    if (!localStorage.getItem(migrationKey)) {
+      const legacy = JSON.parse(localStorage.getItem("pr1zrak_favs") || "[]");
+      const restored = [...SEED_CATALOG, ...SEARCH_RELEASES].filter(t => legacy.includes(t.id));
+      if (restored.length && !libraryTracks.length) {
+        libraryTracks = mergeLibrary(libraryTracks, restored);
+        libraryStore.cache(libraryTracks);
+        await libraryStore.save(restored);
+      }
+      localStorage.setItem(migrationKey, "1");
+    }
+  } catch (_) { /* Pending cloud writes will retry on the next launch. */ }
+  await importLaunchTracks();
 
-  const isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+  const isGitHubPages = !USE_BOT_API;
   if (!isGitHubPages) {
     const res = await api("favorites/" + uid);
     if (res && res.ok) {
       const favs = await res.json();
+      libraryTracks = favs;
       liked = new Set(favs.map(t => t.id));
     }
   }
@@ -1463,4 +1564,9 @@ async function init() {
   SEED_CATALOG.slice(0, 4).forEach(t => loadAudioBuffer(t.audio_url).catch(() => {}));
 }
 
+window.addEventListener("hashchange", async () => {
+  await importLaunchTracks();
+  if (list === "favorites" || list === "wave") await select(list);
+  else render();
+});
 init().catch(showError);

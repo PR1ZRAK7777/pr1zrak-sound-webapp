@@ -7,15 +7,21 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=19">
+  <link rel="stylesheet" href="./style.css?v=20">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 <main>
   <header class="app-header">
-    <div class="search-bar">
-      <input id="search-input" type="search" placeholder="Найти трек или артиста..." autocomplete="off">
-      <button id="search-btn">Искать</button>
+    <div class="top-volume">
+      <button id="volume-toggle" class="vol-icon" aria-label="Регулировать громкость" aria-expanded="false" aria-controls="volume">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      </button>
+      <input id="volume" type="range" min="0" max="100" value="100" aria-label="Громкость">
     </div>
     <nav aria-label="Плейлисты">
       <button data-list="wave" aria-pressed="true">Волна</button>
@@ -23,17 +29,7 @@
       <button data-list="top">Топ</button>
       <button data-list="search" id="tab-search" style="display:none">Поиск</button>
     </nav>
-    <div class="top-volume">
-      <span class="vol-icon" aria-hidden="true">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-        </svg>
-      </span>
-      <span id="volumeLabel">100%</span>
-      <input id="volume" type="range" min="0" max="100" value="100" aria-label="Громкость">
-    </div>
+
   </header>
 
   <section class="art">
@@ -95,7 +91,7 @@
         </svg>
       </span>
     </button>
-    <button id="download-tg" aria-label="Скачать трек" title="Скачать трек на устройство или в Telegram">
+    <button id="download-tg" aria-label="Скачать трек" title="Скачать трек на устройство">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
@@ -104,6 +100,17 @@
     </button>
   </div>
 
+    <div class="search-bar">
+      <input id="search-input" type="search" placeholder="Найти трек или артиста..." autocomplete="off">
+      <button id="search-btn">Искать</button>
+    </div>
+  <section id="wave-locked" class="wave-locked" hidden aria-live="polite">
+    <span class="wave-lock-symbol" aria-hidden="true">◌</span>
+    <h2>Волна узнаёт ваш вкус</h2>
+    <p id="wave-progress-text"></p>
+    <progress id="wave-progress" max="30" value="0" aria-label="Треки для обучения Волны"></progress>
+    <p>Добавляйте треки через поиск или бота.</p>
+  </section>
   <h2 id="list-title">Очередь воспроизведения</h2>
   <ol id="queue"></ol>
 
@@ -143,6 +150,6 @@
 
   <div id="toast" class="toast-notice" aria-live="polite"></div>
 </main>
-<script type="module" src="./app.js?v=19"></script>
+<script type="module" src="./app.js?v=20"></script>
 </body>
 </html>

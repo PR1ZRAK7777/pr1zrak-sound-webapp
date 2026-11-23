@@ -74,10 +74,13 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
   let smoothedBass = 0;
   let isCurrentlyPlaying = false;
   let externalTimeGetter = null;
+  let volume = 1;
+  let visualVolume = 1;
 
   function renderFrame(now) {
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
+    visualVolume += (volume - visualVolume) * Math.min(1, dt * 10);
 
     // 1. Получение басовой энергии
     let bass = 0;
@@ -101,7 +104,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
     }
 
     // Если нет сигнала от analyser, но плеер активен — ритмическая физика битов (128 BPM)
-    if (bass === 0 && isCurrentlyPlaying) {
+    if (!analyser && isCurrentlyPlaying) {
       const curTime = externalTimeGetter ? externalTimeGetter() : (now / 1000);
       const bpm = 128;
       const beatFreq = bpm / 60; // ~2.133 Гц
@@ -118,6 +121,9 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       treble = 0.04;
     }
 
+    if (reduce.matches) bass = treble = 0;
+    bass *= visualVolume;
+    treble *= visualVolume;
     // Плавное сглаживание: мгновенная атака удара, плавный спад
     if (bass > smoothedBass) {
       smoothedBass += (bass - smoothedBass) * 0.82; // взрывная атака
@@ -125,11 +131,16 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       smoothedBass += (bass - smoothedBass) * 0.16; // естественное затухание
     }
 
-    beatPhase += dt * (2.0 + smoothedBass * 4.2);
+    if (!reduce.matches) beatPhase += dt * (2.0 + smoothedBass * 4.2);
 
     // 2. Отрисовка круговой флюидной ауры на Canvas (340x340)
     if (aCtx && auraCanvas) {
       aCtx.clearRect(0, 0, VIRTUAL_SIZE, VIRTUAL_SIZE);
+      aCtx.save();
+      const auraScale = 0.62 + visualVolume * 0.38;
+      aCtx.translate(cx, cy);
+      aCtx.scale(auraScale, auraScale);
+      aCtx.translate(-cx, -cy);
 
       // ДИНАМИЧЕСКИЙ РАДИУС АУРЫ: УВЕЛИЧИВАЕТСЯ ПОД БИТ!
       // В покое: 68px, при сильном басе: 96px (+41% расширение)
@@ -189,7 +200,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
 
         const baseFill = isCore ? `rgba(255, 255, 255, ${layerAlpha})` : `rgba(225, 230, 242, ${layerAlpha * 0.8})`;
         aCtx.fillStyle = baseFill;
-        aCtx.globalAlpha = 1.0;
+        aCtx.globalAlpha = 0.25 + visualVolume * 0.75;
 
         for (let p = 0; p < POINTS_PER_BAND; p++) {
           const u = (p / POINTS_PER_BAND) * Math.PI * 2;
@@ -230,7 +241,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
       aCtx.shadowColor = "#ffffff";
       for (let i = 0; i < particles.length; i++) {
         const pt = particles[i];
-        pt.angle += pt.angularVel + (smoothedBass * 0.007);
+        if (!reduce.matches) pt.angle += pt.angularVel + (smoothedBass * 0.007);
 
         // Импульс от баса: частицы взрываются наружу
         if (smoothedBass > 0.18) {
@@ -248,7 +259,7 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         const py = cy + Math.sin(pt.angle) * pt.dist;
 
         const pAlpha = Math.min(1.0, pt.alpha * (0.65 + smoothedBass * 0.65));
-        aCtx.globalAlpha = 1.0;
+        aCtx.globalAlpha = 0.25 + visualVolume * 0.75;
         aCtx.fillStyle = `rgba(255, 255, 255, ${pAlpha})`;
         aCtx.beginPath();
         aCtx.arc(px, py, pt.size * (1 + smoothedBass * 0.35), 0, Math.PI * 2);
@@ -282,11 +293,11 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
         aCtx.fill();
         aCtx.restore();
       }
+      aCtx.restore();
     }
 
-    if (!reduce.matches) {
-      animFrame = requestAnimationFrame(renderFrame);
-    }
+    animFrame = !reduce.matches || Math.abs(volume - visualVolume) > .001
+      ? requestAnimationFrame(renderFrame) : null;
   }
 
   function startLoop() {
@@ -297,11 +308,17 @@ export function makeVisualizer(auraCanvas, legacySpectrum = null, legacySleeve =
   }
 
   startLoop();
+  reduce.addEventListener("change", startLoop);
 
   return {
+    setVolume: value => {
+      volume = Math.max(0, Math.min(1, Number(value) || 0));
+      startLoop();
+    },
     setPlaying: (playing, timeGetter = null) => {
       isCurrentlyPlaying = Boolean(playing);
       if (timeGetter) externalTimeGetter = timeGetter;
+      startLoop();
     },
     setHue: () => {}, // Строго монохромный режим: оттенки не требуются
     start: async function (externalAudioCtx = null, externalAnalyser = null) {

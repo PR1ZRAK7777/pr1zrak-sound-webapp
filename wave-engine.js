@@ -46,7 +46,12 @@ export function discoveryContext(catalog, history = [], recent = [], liked = [])
   const ids = new Set([...history, ...recent, ...liked]);
   const artists = new Set(catalog.filter(t => ids.has(t.id))
     .map(t => (t.artist || "").trim().toLowerCase()).filter(Boolean));
-  return {active: ids.size >= 30, artists, ids};
+  return {active: new Set(liked).size >= 30, artists, ids};
+}
+
+export function waveProgress(library) {
+  const count = new Set(library.map(t => `${t.artist.trim().toLowerCase()}\n${t.title.trim().toLowerCase()}`)).size;
+  return {count, remaining: Math.max(0, 30 - count), unlocked: count >= 30};
 }
 
 export function shuffleUpcoming(queue, index, familiarIds = new Set()) {
