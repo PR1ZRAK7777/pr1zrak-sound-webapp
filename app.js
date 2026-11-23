@@ -1,7 +1,7 @@
-import {API_BASE, checkPlayerAccess, fetchPlayerAudio} from "./player-access.js?v=25";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=25";
-import {makeVisualizer} from "./visualizer.js?v=25";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=25";
+import {API_BASE, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=26";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=26";
+import {makeVisualizer} from "./visualizer.js?v=26";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=26";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -19,7 +19,7 @@ let accessChecking = null;
 async function validateAccess() {
   if (accessChecking) return accessChecking;
   accessChecking = (async () => {
-    const result = await checkPlayerAccess(tg?.initData);
+    const result = await checkPlayerAccess();
     accessGranted = result.allowed;
     document.body.classList.toggle("access-locked", !accessGranted);
     document.querySelector("main").inert = !accessGranted;
@@ -28,7 +28,7 @@ async function validateAccess() {
     el("access-retry").hidden = accessGranted;
     el("access-message").textContent = result.reason === "vip"
       ? "Плеер, личная коллекция и персональная Волна доступны с VIP. Открой свой музыкальный мир."
-      : result.reason === "telegram" ? "Откройте плеер через кнопку в нашем Telegram-боте."
+      : result.reason === "telegram" || result.reason === "expired" ? "Откройте новую ссылку через /wave в нашем боте — пропуск отсутствует или истёк."
       : "Сейчас не удалось проверить доступ. Повторите попытку немного позже.";
     if (!accessGranted) {
       stopCurrentAudio(false);
@@ -189,6 +189,8 @@ function resolveTrackAudio(track) {
     } catch (_) {}
     return track.audio_url;
   }
+  if (API_BASE && /^bot-\d+$/.test(String(track?.id)))
+    return API_BASE + "/api/audio/" + String(track.id).slice(4);
   const normalize = value => String(value || "").trim().toLowerCase();
   return SEED_CATALOG.find(t =>
     normalize(t.artist) === normalize(track?.artist) &&
@@ -611,8 +613,7 @@ async function api(path, options = {}) {
     const r = await fetch(API_BASE + "/api/" + path, {
       ...options,
       headers: {
-        "X-Telegram-Init-Data": tg?.initData || "",
-        "tuna-skip-browser-warning": "true",
+        ...playerHeaders(),
         "Content-Type": "application/json"
       }
     });
