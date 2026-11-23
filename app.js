@@ -1,7 +1,7 @@
-import {API_BASE, checkPlayerAccess, fetchPlayerAudio} from "./player-access.js?v=24";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=24";
-import {makeVisualizer} from "./visualizer.js?v=24";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=24";
+import {API_BASE, checkPlayerAccess, fetchPlayerAudio} from "./player-access.js?v=25";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=25";
+import {makeVisualizer} from "./visualizer.js?v=25";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=25";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -41,7 +41,19 @@ async function validateAccess() {
   })();
   try { return await accessChecking; } finally { accessChecking = null; }
 }
-el("access-retry").onclick = () => init().catch(showError);
+el("access-retry").onclick = async () => {
+  const button = el("access-retry");
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = "Проверяю…";
+  el("access-message").textContent = "Проверяем ваш доступ на сервере…";
+  try { await init(); }
+  catch (_) { el("access-message").textContent = "Не удалось проверить доступ. Попробуйте ещё раз."; }
+  finally {
+    button.disabled = false;
+    button.textContent = "Проверить доступ";
+  }
+};
 setInterval(() => { if (accessGranted) validateAccess().catch(showError); }, 30000);
 window.addEventListener("focus", () => { if (accessGranted) validateAccess().catch(showError); });
 

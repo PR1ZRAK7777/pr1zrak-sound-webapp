@@ -140,7 +140,7 @@ nav button {
   box-shadow: 0 0 26px rgba(255, 255, 255, 0.85);
 }
 
-/* Player assets v24 */
+/* Player assets v25 */
 .app-header { position: relative; padding-top: 0; }
 .top-volume { position: relative; width: fit-content; margin-top: 10px; min-height: 36px; display: flex; align-items: center; gap: 8px; z-index: 3; }
 .top-volume .vol-icon { width: 36px; min-height: 36px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-secondary); }
