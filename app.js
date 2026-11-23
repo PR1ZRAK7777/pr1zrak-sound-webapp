@@ -1,6 +1,7 @@
-import {appendWaveBatch, discoveryContext, waveProgress, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=20";
-import {makeVisualizer} from "./visualizer.js?v=20";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=20";
+import {API_BASE, checkPlayerAccess, fetchPlayerAudio} from "./player-access.js?v=24";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=24";
+import {makeVisualizer} from "./visualizer.js?v=24";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=24";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -11,7 +12,39 @@ const auraCanvas = el("aura-canvas");
 const auraWrapper = el("aura-wrapper");
 const visualizer = makeVisualizer(auraCanvas);
 
-const getAssetUrl = path => new URL(path, import.meta.url).href;
+const getAssetUrl = path => path.endsWith(".mp3") && API_BASE
+  ? API_BASE + "/api/assets/" + path.split("/").pop() : new URL(path, import.meta.url).href;
+let accessGranted = false;
+let accessChecking = null;
+async function validateAccess() {
+  if (accessChecking) return accessChecking;
+  accessChecking = (async () => {
+    const result = await checkPlayerAccess(tg?.initData);
+    accessGranted = result.allowed;
+    document.body.classList.toggle("access-locked", !accessGranted);
+    document.querySelector("main").inert = !accessGranted;
+    el("access-gate").hidden = accessGranted;
+    el("access-buy").hidden = result.reason !== "vip";
+    el("access-retry").hidden = accessGranted;
+    el("access-message").textContent = result.reason === "vip"
+      ? "Плеер, личная коллекция и персональная Волна доступны с VIP. Открой свой музыкальный мир."
+      : result.reason === "telegram" ? "Откройте плеер через кнопку в нашем Telegram-боте."
+      : "Сейчас не удалось проверить доступ. Повторите попытку немного позже.";
+    if (!accessGranted) {
+      stopCurrentAudio(false);
+      audioBufferCache.clear();
+      document.body.classList.remove("playing");
+      updatePlayIcon(false);
+      visualizer.setPlaying(false);
+    }
+    return accessGranted;
+  })();
+  try { return await accessChecking; } finally { accessChecking = null; }
+}
+el("access-retry").onclick = () => init().catch(showError);
+setInterval(() => { if (accessGranted) validateAccess().catch(showError); }, 30000);
+window.addEventListener("focus", () => { if (accessGranted) validateAccess().catch(showError); });
+
 const DEFAULT_COVER = getAssetUrl("assets/default-cover.png");
 const SEARCH_RELEASES = [{
   id: "type-0-park-music",
@@ -136,7 +169,14 @@ const SEED_CATALOG = [
 
 // Умный определитель аудио для любого трека (по ID, названию, артисту или тегам)
 function resolveTrackAudio(track) {
-  if (track && track.audio_url) return track.audio_url;
+  if (track && track.audio_url) {
+    try {
+      const url = new URL(track.audio_url, location.href);
+      if (API_BASE && url.hostname === "pr1zrak7777.github.io" && /\/assets\/[^/]+\.mp3$/.test(url.pathname))
+        return getAssetUrl("assets/" + url.pathname.split("/").pop());
+    } catch (_) {}
+    return track.audio_url;
+  }
   const normalize = value => String(value || "").trim().toLowerCase();
   return SEED_CATALOG.find(t =>
     normalize(t.artist) === normalize(track?.artist) &&
@@ -360,7 +400,7 @@ async function loadAudioBuffer(url) {
 
   const promise = (async () => {
     try {
-      const res = await fetch(url);
+      const res = await fetchPlayerAudio(url);
       if (!res.ok) throw new Error("fetch failed");
       const arrayBuf = await res.arrayBuffer();
       const ctx = ensureAudioContext();
@@ -498,6 +538,8 @@ function playBufferSource(buffer, offset = 0, sessionId = currentSessionId) {
 /* ────────────────── СОСТОЯНИЕ ПЛЕЕРА И КАТАЛОГА ────────────────── */
 let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, objectURL = null, refilling = false;
 let libraryTracks = [];
+let waveSession = {completed: 0, library: []};
+let lastCompletedWaveSession = -1;
 const libraryStore = createLibraryStore(tg?.CloudStorage, localStorage, uid);
 const savedTrack = t => t && libraryTracks.find(saved =>
   saved.artist.trim().toLowerCase() === t.artist.trim().toLowerCase() &&
@@ -554,10 +596,11 @@ function getCurrentTotalDuration() {
 
 async function api(path, options = {}) {
   try {
-    const r = await fetch("/api/" + path, {
+    const r = await fetch(API_BASE + "/api/" + path, {
       ...options,
       headers: {
         "X-Telegram-Init-Data": tg?.initData || "",
+        "tuna-skip-browser-warning": "true",
         "Content-Type": "application/json"
       }
     });
@@ -632,8 +675,8 @@ function render() {
   const progress = waveProgress(libraryTracks);
   const locked = list === "wave" && !progress.unlocked;
   el("wave-locked").hidden = !locked;
-  el("wave-progress").value = Math.min(30, progress.count);
-  el("wave-progress-text").textContent = `Собрано ${progress.count}/30 треков для обучения Волны. Осталось ${progress.remaining}.`;
+  el("wave-progress").value = Math.min(WAVE_MIN_TRACKS, progress.count);
+  el("wave-progress-text").textContent = `Собрано ${progress.count}/${WAVE_MIN_TRACKS} треков для обучения Волны. Осталось ${progress.remaining}.`;
   el("queue").hidden = locked;
   el("list-title").hidden = locked;
   const t = current();
@@ -701,47 +744,24 @@ function render() {
   });
 }
 
-async function refill() {
-  if (list !== "wave" || tracks.length - index > 3 || refilling) return;
+function waveCatalog() {
+  return [...SEED_CATALOG, ...SEARCH_RELEASES, ...libraryTracks.map(t => ({...t, audio_url: resolveTrackAudio(t)}))];
+}
+
+async function refill(refreshTaste = false) {
+  if (list !== "wave" || (!refreshTaste && tracks.length - index > 1) || refilling) return;
   const r = revision;
   refilling = true;
   try {
     const res = USE_BOT_API ? await api(`wave/${uid}?limit=5`) : null;
-    if (res) {
-      let extra = await res.json();
-      for (const t of extra) knownWaveTracks.set(t.id, t);
-      const context = waveContext();
-      if (context.active) extra = extra.filter(t => !context.artists.has((t.artist || "").trim().toLowerCase()));
-      if (r === revision) {
-        appendWaveBatch(tracks, index, extra, recentPlayed);
-        if (isShuffle) shuffleUpcoming(tracks, index);
-        render();
-      }
-    } else {
-      const currentId = current()?.id;
-      const upcomingIds = new Set(tracks.slice(index + 1).map(t => t.id));
-      const context = waveContext();
-      const pool = SEED_CATALOG.filter(t => t.id !== currentId && !upcomingIds.has(t.id)
-        && (!context.active || !context.artists.has((t.artist || "").trim().toLowerCase())));
-      if (context.active && !pool.length) {
-        el("status").textContent = "В каталоге закончились новые артисты.";
-      }
-
-      const unplayed = pool.filter(t => !recentPlayed.has(t.id));
-      const pickPool = unplayed.length >= 3 ? unplayed : pool;
-
-      let candidates;
-      if (liked.size > 0) {
-        const likedTracks = pickPool.filter(t => liked.has(t.id));
-        const remaining = pickPool.filter(t => !liked.has(t.id)).sort(() => Math.random() - 0.5);
-        candidates = [...likedTracks, ...remaining];
-      } else {
-        candidates = [...pickPool].sort(() => Math.random() - 0.5);
-      }
-      appendWaveBatch(tracks, index, candidates.slice(0, 5), recentPlayed);
-      if (isShuffle) shuffleUpcoming(tracks, index);
-      render();
-    }
+    const remote = res ? await res.json() : [];
+    if (r !== revision) return;
+    const protectedTracks = refreshTaste ? tracks.slice(index, index + 3) : tracks.slice(index);
+    const candidates = buildPersonalizedBatch([...waveCatalog(), ...remote], waveSession.library,
+      recentPlayed, protectedTracks, 5);
+    if (refreshTaste) replaceWaveTail(tracks, index, candidates);
+    else appendWaveBatch(tracks, index, candidates, recentPlayed);
+    render();
   } finally {
     if (r === revision) refilling = false;
   }
@@ -779,6 +799,7 @@ function stopProgressTicker() {
 
 /* ────────────────── ВОСПРОИЗВЕДЕНИЕ ТРЕКА (СТРОГАЯ МОНОПОЛИЯ) ────────────────── */
 async function play(i) {
+  if (!await validateAccess()) return;
   if (!tracks || tracks.length === 0) return;
   if (!tracks[i]) {
     i = 0;
@@ -800,6 +821,14 @@ async function play(i) {
   unlockAudioEngine();
 
   let streamSrc = resolveTrackAudio(selected);
+  if (streamSrc && API_BASE && streamSrc.startsWith(API_BASE + "/api/")) {
+    const response = await fetchPlayerAudio(streamSrc);
+    if (!response.ok) { await validateAccess(); return; }
+    const blob = await response.blob();
+    if (sessionId !== currentSessionId) return;
+    if (objectURL) URL.revokeObjectURL(objectURL);
+    streamSrc = objectURL = URL.createObjectURL(blob);
+  }
   const isGitHubPages = !USE_BOT_API;
 
   if (!isGitHubPages) {
@@ -908,6 +937,16 @@ async function play(i) {
 }
 
 function handleTrackEnd() {
+  if (list === "wave" && lastCompletedWaveSession !== currentSessionId) {
+    lastCompletedWaveSession = currentSessionId;
+    if (recordWaveCompletion(waveSession, libraryTracks)) {
+      const endedSession = currentSessionId;
+      refill(true).then(() => {
+        if (endedSession === currentSessionId) handleTrackEnd();
+      }).catch(showError);
+      return;
+    }
+  }
   if (repeatMode === "one") {
     // Зацикливание текущего трека на повтор с 0:00 при завершении
     play(index).catch(showError);
@@ -999,10 +1038,14 @@ async function select(name) {
   index = 0;
   list = name;
   refilling = false;
+  if (name === "wave") {
+    waveSession = {completed: 0, library: [...libraryTracks]};
+    lastCompletedWaveSession = -1;
+  }
   render();
 
   if (name === "wave" && !waveProgress(libraryTracks).unlocked) {
-    el("status").textContent = "Соберите 30 любимых треков, чтобы открыть Волну";
+    el("status").textContent = "Соберите 15 любимых треков, чтобы открыть Волну";
     return;
   }
 
@@ -1036,52 +1079,12 @@ async function select(name) {
     } else if (name === "top") {
       result = [...SEED_CATALOG];
     } else {
-      // Персонализация Волны на основе любимых треков и истории
-      let historyIds = [];
-      try {
-        const hist = localStorage.getItem("pr1zrak_history");
-        if (hist) historyIds = JSON.parse(hist);
-      } catch (_) {}
-
-      let pool = [...SEED_CATALOG].sort(() => Math.random() - 0.5);
-      if (liked.size > 0 || historyIds.length > 0) {
-        const likedTracks = SEED_CATALOG.filter(t => liked.has(t.id)).sort(() => Math.random() - 0.5);
-        const historyTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
-        const otherTracks = SEED_CATALOG.filter(t => !liked.has(t.id) && !historyIds.includes(t.id)).sort(() => Math.random() - 0.5);
-        pool = [...likedTracks, ...historyTracks, ...otherTracks];
-      }
-
-      // Приоритет недавних треков: недавно прослушанные опускаем в конец очереди
-      if (recentPlayed.size > 0) {
-        const recentList = Array.from(recentPlayed);
-        pool.sort((a, b) => {
-          const aRec = recentList.indexOf(a.id);
-          const bRec = recentList.indexOf(b.id);
-          if (aRec === -1 && bRec !== -1) return -1;
-          if (aRec !== -1 && bRec === -1) return 1;
-          return aRec - bRec;
-        });
-      }
-
-      // Устраняем дубликаты треков в очереди
-      const seen = new Set();
-      result = [];
-      for (const t of pool) {
-        if (!seen.has(t.id)) {
-          seen.add(t.id);
-          result.push(t);
-        }
-      }
+      result = buildPersonalizedBatch(waveCatalog(), waveSession.library, recentPlayed, [], 5);
     }
   }
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
-  if (list === "wave") {
-    const context = waveContext();
-    if (context.active) tracks = tracks.filter(t =>
-      !context.artists.has((t.artist || "").trim().toLowerCase()));
-  }
   if (isShuffle && tracks.length > 1) {
     shuffleUpcoming(tracks, -1);
     index = 0;
@@ -1415,6 +1418,7 @@ function closeDownloadModal() {
 }
 
 async function triggerDirectDownload(track = null) {
+  if (!await validateAccess()) return;
   const t = track?.id ? track : current();
   if (!t) return;
   closeDownloadModal();
@@ -1432,7 +1436,7 @@ async function triggerDirectDownload(track = null) {
   showToast("⏳ Сохраняю аудиофайл...");
   const extension = audioUrl ? new URL(audioUrl, location.href).pathname.match(/\.(mp3|m4a|ogg|wav)$/i)?.[0] || ".mp3" : ".mp3";
   const cleanFilename = `${t.artist} - ${t.title}`.replace(/[\\/:*?"<>|#]/g, "_").trim() + extension;
-  if (audioUrl?.startsWith("https://") && tg?.downloadFile && tg.isVersionAtLeast?.("8.0") &&
+  if (audioUrl?.startsWith("https://") && !audioUrl.startsWith(API_BASE + "/api/") && tg?.downloadFile && tg.isVersionAtLeast?.("8.0") &&
       ["android", "ios", "tdesktop", "macos"].includes(tg.platform)) {
     try {
       tg.downloadFile({url: audioUrl, file_name: cleanFilename}, accepted =>
@@ -1442,7 +1446,7 @@ async function triggerDirectDownload(track = null) {
   }
 
   try {
-    const response = audioUrl ? await fetch(audioUrl) : await api("audio/" + t.id);
+    const response = audioUrl ? await fetchPlayerAudio(audioUrl) : await api("audio/" + t.id);
     if (!response.ok) throw new Error("fetch failed");
     const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
@@ -1523,6 +1527,9 @@ async function importLaunchTracks() {
 }
 
 async function init() {
+  tg?.ready();
+  tg?.expand();
+  if (!await validateAccess()) return;
   if (tg) {
     tg.ready();
     tg.expand();

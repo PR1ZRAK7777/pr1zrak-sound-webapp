@@ -6,13 +6,22 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <meta name="player-api" content="https://funny-panda-8052.a.tuna.free">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=20">
+  <link rel="stylesheet" href="./style.css?v=24">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body>
-<main>
+<body class="access-locked">
+<main inert>
   <header class="app-header">
+
+    <nav aria-label="Плейлисты">
+      <button data-list="wave" aria-pressed="true">Волна</button>
+      <button data-list="favorites">Мои треки</button>
+      <button data-list="top">Топ</button>
+      <button data-list="search" id="tab-search" style="display:none">Поиск</button>
+    </nav>
+
     <div class="top-volume">
       <button id="volume-toggle" class="vol-icon" aria-label="Регулировать громкость" aria-expanded="false" aria-controls="volume">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -23,13 +32,6 @@
       </button>
       <input id="volume" type="range" min="0" max="100" value="100" aria-label="Громкость">
     </div>
-    <nav aria-label="Плейлисты">
-      <button data-list="wave" aria-pressed="true">Волна</button>
-      <button data-list="favorites">Мои треки</button>
-      <button data-list="top">Топ</button>
-      <button data-list="search" id="tab-search" style="display:none">Поиск</button>
-    </nav>
-
   </header>
 
   <section class="art">
@@ -50,6 +52,7 @@
     </div>
     <input id="seek" type="range" min="0" max="100" value="0" aria-label="Позиция">
   </div>
+
 
   <div class="controls">
     <button id="shuffle" aria-label="Перемешать" aria-pressed="false" title="Перемешать треки">
@@ -108,7 +111,7 @@
     <span class="wave-lock-symbol" aria-hidden="true">◌</span>
     <h2>Волна узнаёт ваш вкус</h2>
     <p id="wave-progress-text"></p>
-    <progress id="wave-progress" max="30" value="0" aria-label="Треки для обучения Волны"></progress>
+    <progress id="wave-progress" max="15" value="0" aria-label="Треки для обучения Волны"></progress>
     <p>Добавляйте треки через поиск или бота.</p>
   </section>
   <h2 id="list-title">Очередь воспроизведения</h2>
@@ -150,6 +153,16 @@
 
   <div id="toast" class="toast-notice" aria-live="polite"></div>
 </main>
-<script type="module" src="./app.js?v=20"></script>
+<section id="access-gate" class="access-gate" role="dialog" aria-modal="true" aria-labelledby="access-title">
+  <div class="access-card">
+    <span aria-hidden="true">🎧</span>
+    <h2 id="access-title">Твоя музыка. Твой вайб.</h2>
+    <p id="access-message">Проверяем доступ к плееру…</p>
+    <a id="access-buy" class="access-action" href="https://t.me/PR1ZRAKWORK_BOT?start=player_vip" hidden>⭐ Купить VIP</a>
+    <button id="access-retry" hidden>Проверить доступ</button>
+    <a class="access-return" href="https://t.me/PR1ZRAKWORK_BOT">Вернуться в бот</a>
+  </div>
+</section>
+<script type="module" src="./app.js?v=24"></script>
 </body>
 </html>

@@ -140,9 +140,9 @@ nav button {
   box-shadow: 0 0 26px rgba(255, 255, 255, 0.85);
 }
 
-/* Player assets v20 */
-.app-header { position: relative; padding-top: 44px; }
-.top-volume { position: absolute; top: 0; left: 0; display: flex; align-items: center; gap: 8px; z-index: 3; }
+/* Player assets v24 */
+.app-header { position: relative; padding-top: 0; }
+.top-volume { position: relative; width: fit-content; margin-top: 10px; min-height: 36px; display: flex; align-items: center; gap: 8px; z-index: 3; }
 .top-volume .vol-icon { width: 36px; min-height: 36px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-secondary); }
 .top-volume input { width: 0; opacity: 0; pointer-events: none; accent-color: white; transition: width .18s, opacity .18s; }
 .top-volume:hover input, .top-volume:focus-within input, .top-volume.open input { width: 100px; opacity: 1; pointer-events: auto; }
@@ -532,3 +532,13 @@ li.track-row.active {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
 }
+
+body.access-locked main { filter: blur(9px); opacity: .45; pointer-events: none; user-select: none; }
+.access-gate { position: fixed; inset: 0; z-index: 4000; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.45); }
+.access-gate[hidden], .access-card [hidden] { display: none; }
+.access-card { width: min(100%,360px); padding: 30px 24px; border: 1px solid #ffffff38; border-radius: 24px; background: #101014ed; text-align: center; box-shadow: 0 20px 90px #000; }
+.access-card > span { font-size: 34px; }
+.access-card h2 { font-size: 22px; }
+.access-card p { color: #b6b8c0; line-height: 1.6; }
+.access-action { display: block; padding: 14px; margin: 20px 0; border-radius: 12px; color: #000; background: #fff; text-decoration: none; font-weight: 700; }
+.access-return { display: block; margin-top: 18px; color: #aeb0ba; text-decoration: none; }
