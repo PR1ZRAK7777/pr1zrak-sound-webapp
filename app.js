@@ -1,8 +1,8 @@
-import {createAppearance} from "./appearance.js?v=28";
-import {API_BASE, PLAYER_USER_ID, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=28";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=28";
-import {makeVisualizer} from "./visualizer.js?v=28";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=28";
+import {createAppearance} from "./appearance.js?v=29";
+import {API_BASE, PLAYER_USER_ID, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=29";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=29";
+import {makeVisualizer} from "./visualizer.js?v=29";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=29";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
@@ -709,11 +709,11 @@ let topLoadedAt = 0;
 let activeDrag;
 
 const genrePatterns = {
-  breakcore: /breakcore|break core|sewerslvt|goreshit|machine girl/i,
+  breakcore: /breakcore|break core|sewerslvt|goreshit|machine girl|zxcursed|shadowraze|dead inside|1000[- ]7|рейз/i,
   phonk: /phonk|drift|фонк|dvrst|lxst\s*cxntury|kordhell|interworld|moondeity|kaito shoma/i,
   melancholy: /melanchol|меланхол|sadcore|slowcore|dead inside|fem[. ]love/i,
-  hyperpop: /hyperpop|гиперпоп|100 gecs|glaive|underscores/i,
-  lofi: /lo[ -]?fi|ло[ -]?фай|jinsang|idealism|eevee/i,
+  hyperpop: /hyperpop|hyper pop|гиперпоп|100 gecs|glaive|underscores|charli xcx|osquinn|ericdoa/i,
+  lofi: /lo[ -]?fi|ло[ -]?фай|jinsang|idealism|eevee|nujabes|chillhop|chilledcow/i,
 };
 
 function orderLibrary(items, order) {
@@ -847,15 +847,17 @@ removeDialog.onclose = () => {
 
 function updateTopQueue() {
   if (list !== "top") return;
-  const items = topCatalog.filter(track => {
+  const candidates = genre === "all" || genre === "weekly" ? topCatalog
+    : mergeLibrary([...SEED_CATALOG, ...SEARCH_RELEASES], topCatalog);
+  const items = candidates.filter(track => {
     if (genre === "all") return true;
     if (genre === "weekly") return track.weekly_plays > 0;
     return genrePatterns[genre].test([track.artist, track.title, ...(track.aliases || [])].join(" "));
   });
   replaceQueue(items);
   render();
-  el("status").textContent = !topIsLive ? "Каталог временно недоступен. Показана локальная подборка."
-    : items.length ? "Топ каталога за последние 7 дней" : "В этой категории пока нет треков.";
+  el("status").textContent = !items.length ? "В этой категории треки появятся по мере прослушиваний"
+    : !topIsLive ? "Показана локальная подборка." : "Топ каталога за последние 7 дней";
 }
 
 async function refreshTop() {
@@ -867,6 +869,13 @@ async function refreshTop() {
   topLoadedAt = Date.now();
   updateTopQueue();
 }
+
+el("genre-tabs").addEventListener("wheel", event => {
+  if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+    event.preventDefault();
+    event.currentTarget.scrollBy({left: event.deltaY, behavior: "smooth"});
+  }
+}, {passive: false});
 
 for (const tab of document.querySelectorAll("[data-genre]")) {
   tab.onclick = () => {
@@ -1017,6 +1026,8 @@ function render() {
     emptyLi.style.cssText = "color: rgba(255,255,255,0.45); text-align: center; padding: 28px 16px; font-size: 13px; list-style: none; line-height: 1.6;";
     if (list === "favorites") {
       emptyLi.innerHTML = "В «Моих треках» пока пусто.<br>Отправьте себе трек через бота или сохраните его в плеере.";
+    } else if (list === "top") {
+      emptyLi.textContent = "В этой категории треки появятся по мере прослушиваний";
     } else {
       emptyLi.textContent = "Список воспроизведения пуст.";
     }
