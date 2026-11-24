@@ -1,12 +1,12 @@
-import {createAppearance} from "./appearance.js?v=27";
-import {API_BASE, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=27";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=27";
-import {makeVisualizer} from "./visualizer.js?v=27";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=27";
+import {createAppearance} from "./appearance.js?v=28";
+import {API_BASE, PLAYER_USER_ID, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=28";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=28";
+import {makeVisualizer} from "./visualizer.js?v=28";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=28";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
-const uid = tg?.initDataUnsafe?.user?.id || 0;
+const uid = tg?.initDataUnsafe?.user?.id || PLAYER_USER_ID || 0;
 const USE_BOT_API = document.documentElement.dataset.botApi === "true";
 const audio = el("audio");
 const auraCanvas = el("aura-canvas");
@@ -611,8 +611,10 @@ function getCurrentTotalDuration() {
 }
 
 async function api(path, options = {}) {
+  if (!API_BASE) return null;
   try {
     const r = await fetch(API_BASE + "/api/" + path, {
+      signal: AbortSignal.timeout(6000),
       ...options,
       headers: {
         ...playerHeaders(),
@@ -686,7 +688,306 @@ function updateShuffleIcon(active) {
   btn.setAttribute("title", active ? "Случайный порядок включен" : "Перемешать треки");
 }
 
+const trackKey = track => JSON.stringify([track.artist.trim().toLowerCase(), track.title.trim().toLowerCase()]);
+const catalogId = track => Number(/^bot-(\d+)$/.exec(String(track?.id))?.[1]) || null;
+const orderKey = `pr1zrak_order_${uid}`;
+const pendingOrderKey = orderKey + "_pending";
+const selectedTracks = new Set();
+const trackMenu = el("track-menu");
+const removeDialog = el("confirm-remove");
+let selectingTracks = false;
+let removingTracks = false;
+let libraryRevision = 0;
+let pendingOrderWrite = Promise.resolve();
+let libraryRequest;
+let menuTrack;
+let removalKeys = [];
+let genre = "all";
+let topCatalog = [];
+let topIsLive = false;
+let topLoadedAt = 0;
+let activeDrag;
+
+const genrePatterns = {
+  breakcore: /breakcore|break core|sewerslvt|goreshit|machine girl/i,
+  phonk: /phonk|drift|фонк|dvrst|lxst\s*cxntury|kordhell|interworld|moondeity|kaito shoma/i,
+  melancholy: /melanchol|меланхол|sadcore|slowcore|dead inside|fem[. ]love/i,
+  hyperpop: /hyperpop|гиперпоп|100 gecs|glaive|underscores/i,
+  lofi: /lo[ -]?fi|ло[ -]?фай|jinsang|idealism|eevee/i,
+};
+
+function orderLibrary(items, order) {
+  const ranks = new Map(order.map((key, i) => [key, i]));
+  return [...items].sort((a, b) => (ranks.get(trackKey(a)) ?? Infinity) - (ranks.get(trackKey(b)) ?? Infinity));
+}
+
+function replaceQueue(items) {
+  const playing = current();
+  const nextIndex = playing ? items.findIndex(t => trackKey(t) === trackKey(playing)) : -1;
+  if (playing && nextIndex < 0) {
+    ++currentSessionId;
+    stopCurrentAudio(false);
+    document.body.classList.remove("playing");
+    visualizer.setPlaying(false);
+    updatePlayIcon(false);
+  }
+  tracks = items;
+  index = Math.max(0, nextIndex);
+}
+
+function updateLibrary(items) {
+  libraryTracks = items;
+  liked = new Set(items.map(track => track.id));
+  libraryStore.cache(items);
+  if (list === "favorites") {
+    replaceQueue([...items]);
+    el("status").textContent = tracks.length ? "Личная библиотека" : "В библиотеке пока пусто.";
+  }
+  render();
+}
+
+async function refreshLibrary() {
+  if (!API_BASE || removingTracks || activeDrag) return;
+  if (libraryRequest) return libraryRequest;
+  const version = libraryRevision;
+  libraryRequest = (async () => {
+    const response = await api("library");
+    if (!response) return;
+    const profile = await response.json();
+    if (version !== libraryRevision || activeDrag || removingTracks) return;
+    const tracksFromBot = profile.tracks.map(track => ({...track, fromBotProfile: true}));
+    const keys = new Set(tracksFromBot.map(trackKey));
+    const previous = libraryTracks.filter(track => !track.fromBotProfile || keys.has(trackKey(track)));
+    const pending = localStorage.getItem(pendingOrderKey);
+    const order = pending ? JSON.parse(pending) : profile.order;
+    const items = orderLibrary(mergeLibrary(previous, tracksFromBot), order);
+    localStorage.setItem(orderKey, JSON.stringify(order));
+    if (JSON.stringify(items) !== JSON.stringify(libraryTracks)) updateLibrary(items);
+    if (pending) saveProfileOrder(pending);
+  })();
+  try { await libraryRequest; } finally { libraryRequest = null; }
+}
+
+function saveProfileOrder(order) {
+  pendingOrderWrite = pendingOrderWrite.then(async () => {
+    if (localStorage.getItem(pendingOrderKey) !== order) return;
+    const response = await api("library", {method: "POST", body: `{"order":${order}}`});
+    if (!response) {
+      showToast("Порядок сохранён на устройстве. Синхронизация повторится при подключении.");
+    } else if (localStorage.getItem(pendingOrderKey) === order) {
+      localStorage.removeItem(pendingOrderKey);
+    }
+  }).catch(showError);
+}
+
+function moveLibraryTrack(from, to) {
+  if (removingTracks || from === to || from < 0 || to < 0 || to >= libraryTracks.length) return;
+  ++libraryRevision;
+  const items = [...libraryTracks];
+  items.splice(to, 0, items.splice(from, 1)[0]);
+  const order = JSON.stringify(items.map(trackKey));
+  localStorage.setItem(orderKey, order);
+  if (API_BASE) {
+    localStorage.setItem(pendingOrderKey, order);
+    saveProfileOrder(order);
+  }
+  updateLibrary(items);
+}
+
+function updateSelection() {
+  const count = selectedTracks.size;
+  el("library-tools").hidden = list !== "favorites";
+  el("select-tracks").textContent = selectingTracks ? "Готово" : "Выбрать";
+  el("select-tracks").setAttribute("aria-pressed", String(selectingTracks));
+  el("selection-actions").hidden = list !== "favorites" || !selectingTracks;
+  el("delete-selected").disabled = !count || removingTracks;
+  el("delete-selected").textContent = `Удалить выбранные (${count})`;
+}
+
+function confirmRemoval(keys) {
+  if (removingTracks || !keys.length) return;
+  removalKeys = keys;
+  el("confirm-remove-title").textContent = `Удалить треки из библиотеки (${keys.length})?`;
+  removeDialog.returnValue = "";
+  removeDialog.showModal();
+}
+
+async function removeLibraryTracks(keys) {
+  if (removingTracks) return;
+  const selected = new Set(keys);
+  const removed = libraryTracks.filter(track => selected.has(trackKey(track)));
+  const ids = removed.flatMap(track => [track.id, ...(track.libraryIds || [])])
+    .map(id => catalogId({id})).filter(Boolean);
+  ++libraryRevision;
+  removingTracks = true;
+  updateSelection();
+  try {
+    if (ids.length && API_BASE && !await api("library", {method: "DELETE", body: JSON.stringify({ids})})) {
+      throw Error("Не удалось удалить треки. Проверьте соединение и повторите.");
+    }
+    for (const key of keys) selectedTracks.delete(key);
+    updateLibrary(libraryTracks.filter(track => !selected.has(trackKey(track))));
+    try { await libraryStore.save([], removed.flatMap(track => [track.id, ...(track.libraryIds || [])])); }
+    catch (_) { showToast("Удалено на этом устройстве. Синхронизация с Telegram ожидает подключения."); }
+  } finally {
+    removingTracks = false;
+    updateSelection();
+  }
+}
+
+el("select-tracks").onclick = () => {
+  selectingTracks = !selectingTracks;
+  selectedTracks.clear();
+  render();
+};
+el("delete-selected").onclick = () => confirmRemoval([...selectedTracks]);
+removeDialog.onclose = () => {
+  if (removeDialog.returnValue === "delete") removeLibraryTracks(removalKeys).catch(showError);
+};
+
+function updateTopQueue() {
+  if (list !== "top") return;
+  const items = topCatalog.filter(track => {
+    if (genre === "all") return true;
+    if (genre === "weekly") return track.weekly_plays > 0;
+    return genrePatterns[genre].test([track.artist, track.title, ...(track.aliases || [])].join(" "));
+  });
+  replaceQueue(items);
+  render();
+  el("status").textContent = !topIsLive ? "Каталог временно недоступен. Показана локальная подборка."
+    : items.length ? "Топ каталога за последние 7 дней" : "В этой категории пока нет треков.";
+}
+
+async function refreshTop() {
+  const response = await api("top");
+  const result = response ? await response.json() : null;
+  if (list !== "top") return;
+  topIsLive = Boolean(result);
+  topCatalog = result || SEED_CATALOG;
+  topLoadedAt = Date.now();
+  updateTopQueue();
+}
+
+for (const tab of document.querySelectorAll("[data-genre]")) {
+  tab.onclick = () => {
+    genre = tab.dataset.genre;
+    for (const button of document.querySelectorAll("[data-genre]")) {
+      button.setAttribute("aria-pressed", String(button === tab));
+    }
+    updateTopQueue();
+  };
+}
+
+function closeTrackMenu() {
+  if (!trackMenu.hidden) {
+    trackMenu.hidden = true;
+    menuTrack?.button.setAttribute("aria-expanded", "false");
+  }
+}
+
+function openTrackMenu(track, button) {
+  const same = !trackMenu.hidden && menuTrack?.button === button;
+  closeTrackMenu();
+  if (same) return;
+  menuTrack = {track, button};
+  const saved = Boolean(savedTrack(track));
+  el("menu-promote").hidden = !saved;
+  el("menu-remove").hidden = !saved;
+  trackMenu.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+  positionTrackMenu();
+  el("menu-download").focus({preventScroll: true});
+}
+
+function positionTrackMenu() {
+  if (trackMenu.hidden) return;
+  const bounds = menuTrack.button.getBoundingClientRect();
+  if (bounds.bottom < 0 || bounds.top > innerHeight) {
+    closeTrackMenu();
+    return;
+  }
+  trackMenu.style.left = Math.max(8, bounds.right - trackMenu.offsetWidth) + "px";
+  trackMenu.style.top = (bounds.bottom + trackMenu.offsetHeight + 8 > innerHeight
+    ? Math.max(8, bounds.top - trackMenu.offsetHeight - 4) : bounds.bottom + 4) + "px";
+}
+
+el("menu-download").onclick = () => {
+  closeTrackMenu();
+  triggerDirectDownload(menuTrack.track).catch(showError);
+};
+el("menu-promote").onclick = () => {
+  closeTrackMenu();
+  moveLibraryTrack(libraryTracks.findIndex(t => trackKey(t) === trackKey(menuTrack.track)), 0);
+};
+el("menu-remove").onclick = () => {
+  closeTrackMenu();
+  confirmRemoval([trackKey(menuTrack.track)]);
+};
+document.addEventListener("pointerdown", event => {
+  if (!trackMenu.contains(event.target) && !event.target.closest(".track-more")) closeTrackMenu();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !trackMenu.hidden) {
+    closeTrackMenu();
+    menuTrack.button.focus();
+  }
+});
+window.addEventListener("scroll", positionTrackMenu, {passive: true});
+window.addEventListener("resize", positionTrackMenu);
+
+function attachDrag(handle, row, track) {
+  handle.onpointerdown = event => {
+    if (!event.isPrimary || event.button !== 0 || removingTracks) return;
+    handle.setPointerCapture(event.pointerId);
+    const from = libraryTracks.findIndex(item => trackKey(item) === trackKey(track));
+    const start = event.clientY;
+    let x = event.clientX, y = start, target, frame;
+    const draw = () => {
+      if (Math.abs(y - start) >= 5 || row.classList.contains("dragging")) {
+        row.classList.add("dragging");
+        row.style.transform = `translate3d(0, ${y - start}px, 0)`;
+        if (y < 52) window.scrollBy(0, -12);
+        if (y > innerHeight - 52) window.scrollBy(0, 12);
+        const hit = document.elementFromPoint(x, y)?.closest("[data-track-index]");
+        if (hit !== target && hit) {
+          target?.classList.remove("drop-target");
+          target = hit;
+          target.classList.add("drop-target");
+        }
+      }
+      frame = requestAnimationFrame(draw);
+    };
+    const finish = commit => {
+      cancelAnimationFrame(frame);
+      row.classList.remove("dragging");
+      row.style.transform = "";
+      target?.classList.remove("drop-target");
+      handle.onpointermove = handle.onpointerup = handle.onlostpointercapture = null;
+      activeDrag = null;
+      if (commit && target) moveLibraryTrack(from, Number(target.dataset.trackIndex));
+    };
+    activeDrag = () => finish(false);
+    handle.onpointermove = move => { x = move.clientX; y = move.clientY; };
+    handle.onpointerup = () => finish(true);
+    handle.onlostpointercapture = () => finish(false);
+    frame = requestAnimationFrame(draw);
+  };
+  handle.onkeydown = event => {
+    if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const from = libraryTracks.findIndex(item => trackKey(item) === trackKey(track));
+    const to = from + (event.key === "ArrowUp" ? -1 : 1);
+    moveLibraryTrack(from, to);
+    el("queue").children[to]?.querySelector(".track-drag")?.focus();
+  };
+}
+
 function render() {
+  activeDrag?.();
+  closeTrackMenu();
+  el("genre-tabs").hidden = list !== "top";
+  el("shuffle").disabled = list === "favorites" || list === "top";
+  updateSelection();
   const progress = waveProgress(libraryTracks);
   const locked = list === "wave" && !progress.unlocked;
   el("wave-locked").hidden = !locked;
@@ -715,7 +1016,7 @@ function render() {
     emptyLi.className = "track-empty-msg";
     emptyLi.style.cssText = "color: rgba(255,255,255,0.45); text-align: center; padding: 28px 16px; font-size: 13px; list-style: none; line-height: 1.6;";
     if (list === "favorites") {
-      emptyLi.innerHTML = "В «Моих треках» пока пусто.<br>Находите любимую музыку через поиск и ставьте ❤️!";
+      emptyLi.innerHTML = "В «Моих треках» пока пусто.<br>Отправьте себе трек через бота или сохраните его в плеере.";
     } else {
       emptyLi.textContent = "Список воспроизведения пуст.";
     }
@@ -739,22 +1040,49 @@ function render() {
     trackDur.className = "track-duration-text";
     trackDur.textContent = track.is_preview ? `${clock(track.full_duration_sec || 180)} (превью)` : clock(track.duration_sec);
 
-    const download = document.createElement("button");
-    download.className = "track-download";
-    download.textContent = "↓";
-    download.setAttribute("aria-label", `Скачать ${track.artist} — ${track.title}`);
-    download.onclick = e => { e.stopPropagation(); triggerDirectDownload(track).catch(showError); };
-    download.onkeydown = e => e.stopPropagation();
-    li.append(infoSpan, trackDur, download);
-
-    // Клик по любому месту строки трека мгновенно запускает воспроизведение
-    li.onclick = () => play(i).catch(showError);
-    li.onkeydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        play(i).catch(showError);
+    li.dataset.trackIndex = i;
+    if (list === "favorites" && selectingTracks) {
+      const checkbox = document.createElement("input");
+      const key = trackKey(track);
+      checkbox.type = "checkbox";
+      checkbox.checked = selectedTracks.has(key);
+      checkbox.setAttribute("aria-label", `Выбрать ${track.artist} — ${track.title}`);
+      checkbox.onchange = () => {
+        if (checkbox.checked) selectedTracks.add(key);
+        else selectedTracks.delete(key);
+        updateSelection();
+      };
+      li.removeAttribute("role");
+      li.removeAttribute("tabindex");
+      li.removeAttribute("title");
+      li.onclick = event => { if (event.target !== checkbox) checkbox.click(); };
+      li.append(checkbox, infoSpan, trackDur);
+    } else {
+      if (list === "favorites") {
+        const handle = document.createElement("button");
+        handle.className = "track-drag";
+        handle.textContent = "⠿";
+        handle.setAttribute("aria-label", `Переместить ${track.title}`);
+        handle.onclick = event => event.stopPropagation();
+        attachDrag(handle, li, track);
+        li.append(handle);
       }
-    };
+      const more = document.createElement("button");
+      more.className = "track-more";
+      more.textContent = "⋮";
+      more.setAttribute("aria-label", `Действия: ${track.artist} — ${track.title}`);
+      more.setAttribute("aria-controls", "track-menu");
+      more.setAttribute("aria-expanded", "false");
+      more.onclick = event => { event.stopPropagation(); openTrackMenu(track, more); };
+      li.append(infoSpan, trackDur, more);
+      li.onclick = () => play(i).catch(showError);
+      li.onkeydown = event => {
+        if (event.target === li && ["Enter", " "].includes(event.key)) {
+          event.preventDefault();
+          play(i).catch(showError);
+        }
+      };
+    }
 
     queueEl.append(li);
   });
@@ -946,9 +1274,8 @@ async function play(i) {
   } catch (_) {}
   waveContext();
 
-  if (!isGitHubPages) {
-    api("listen", { method: "POST", body: JSON.stringify({ id: selected.id }) }).catch(() => {});
-  }
+  const listenedId = catalogId(selected) || (USE_BOT_API ? selected.id : null);
+  if (listenedId) api("listen", {method: "POST", body: JSON.stringify({id: listenedId})});
   refill().catch(() => {});
 }
 
@@ -1052,6 +1379,10 @@ async function select(name) {
 
   tracks = [];
   index = 0;
+  if (name !== "favorites") {
+    selectingTracks = false;
+    selectedTracks.clear();
+  }
   list = name;
   refilling = false;
   if (name === "wave") {
@@ -1059,11 +1390,6 @@ async function select(name) {
     lastCompletedWaveSession = -1;
   }
   render();
-
-  if (name === "wave" && !waveProgress(libraryTracks).unlocked) {
-    el("status").textContent = "Соберите 15 любимых треков, чтобы открыть Волну";
-    return;
-  }
 
   const tabSearch = el("tab-search");
   if (name !== "search" && tabSearch) tabSearch.style.display = "none";
@@ -1074,6 +1400,24 @@ async function select(name) {
   const lt = el("list-title");
   if (lt) {
     lt.textContent = name === "favorites" ? "Мои треки" : name === "top" ? "Топ хитов" : "Моя Волна";
+  }
+
+  if (name === "top") {
+    if (topLoadedAt) updateTopQueue();
+    if (Date.now() - topLoadedAt > 60000) await refreshTop();
+    return;
+  }
+  if (name === "favorites") {
+    replaceQueue([...libraryTracks]);
+    render();
+    el("status").textContent = tracks.length ? "Личная библиотека" : "В библиотеке пока пусто.";
+    await refreshLibrary();
+    return;
+  }
+
+  if (name === "wave" && !waveProgress(libraryTracks).unlocked) {
+    el("status").textContent = "Соберите 15 любимых треков, чтобы открыть Волну";
+    return;
   }
 
   let result = null;
@@ -1088,16 +1432,7 @@ async function select(name) {
 
   if (r !== revision || sessionId !== currentSessionId) return;
 
-  if (!result || !result.length) {
-    if (name === "favorites") {
-      // У нового пользователя в "Моих треках" ИЗНАЧАЛЬНО 0 ТРЕКОВ!
-      result = [...libraryTracks];
-    } else if (name === "top") {
-      result = [...SEED_CATALOG];
-    } else {
-      result = buildPersonalizedBatch(waveCatalog(), waveSession.library, recentPlayed, [], 5);
-    }
-  }
+  if (!result?.length) result = buildPersonalizedBatch(waveCatalog(), waveSession.library, recentPlayed, [], 5);
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
@@ -1108,7 +1443,7 @@ async function select(name) {
   render();
 
   if (name === "favorites" && tracks.length === 0) {
-    el("status").textContent = "В Моих треках пока пусто. Добавляйте треки сердечком ❤️";
+    el("status").textContent = "В Моих треках пока пусто. Сохраняйте треки из бота или плеера.";
   } else {
     el("status").textContent = tracks.length ? "Студийный звук • 320 kbps" : "Пока нет треков.";
   }
@@ -1353,45 +1688,20 @@ el("like").onclick = async () => {
   el("like").disabled = true;
   try {
     const saved = savedTrack(t);
-    const was = Boolean(saved);
-    const isGitHubPages = !USE_BOT_API;
-    if (!isGitHubPages) {
-      const response = await api("like", {
-        method: was ? "DELETE" : "POST",
-        body: JSON.stringify({ id: t.id })
-      });
-      if (!response) throw Error("Не удалось сохранить трек на сервере");
+    if (saved) {
+      confirmRemoval([trackKey(saved)]);
+      return;
     }
-    const before = libraryTracks;
-    const updated = was ? libraryTracks.filter(track => track.id !== saved.id) : mergeLibrary(libraryTracks, [t]);
-    const removed = before.filter(track => !updated.some(item => item.id === track.id)).map(track => track.id);
-    libraryTracks = updated;
-    libraryStore.cache(libraryTracks);
-    try {
-      await libraryStore.save(was ? [] : [t], removed);
-    } catch (_) { showToast("Сохранено на устройстве. Облако недоступно — повторите позже."); }
-    liked = new Set(libraryTracks.map(track => track.id));
-
-    try {
-      localStorage.setItem(`pr1zrak_favs_${uid}`, JSON.stringify([...liked]));
-    } catch (_) {}
-
-    if (was && list === "favorites") {
-      const playing = current()?.id;
-      tracks = tracks.filter(track => track.id !== t.id);
-      if (playing === t.id) {
-        stopCurrentAudio(false);
-        index = Math.max(0, Math.min(index, tracks.length - 1));
-        if (tracks.length > 0) {
-          play(index).catch(showError);
-        } else {
-          el("status").textContent = "В Моих треках пока пусто. Добавляйте треки сердечком ❤️";
-        }
-      } else {
-        index = tracks.findIndex(track => track.id === playing);
-      }
+    if (removingTracks) return;
+    ++libraryRevision;
+    const id = catalogId(t);
+    if (id && API_BASE && !await api("like", {method: "POST", body: JSON.stringify({id})})) {
+      throw Error("Не удалось сохранить трек на сервере");
     }
-    render();
+    const track = id && API_BASE ? {...t, fromBotProfile: true} : t;
+    updateLibrary(mergeLibrary(libraryTracks, [track]));
+    try { await libraryStore.save([track]); }
+    catch (_) { showToast("Сохранено на устройстве. Синхронизация с Telegram ожидает подключения."); }
   } catch (e) {
     showError(e);
   } finally {
@@ -1554,7 +1864,7 @@ async function init() {
   }
 
   const saved = await libraryStore.load();
-  libraryTracks = saved.tracks;
+  libraryTracks = orderLibrary(saved.tracks, JSON.parse(localStorage.getItem(orderKey) || "[]"));
   if (saved.error) showToast("Облако недоступно. Загружена копия с устройства.", 4000);
   // Preserve the previous player's locally saved catalog favorites on upgrade.
   try {
@@ -1572,15 +1882,7 @@ async function init() {
   } catch (_) { /* Pending cloud writes will retry on the next launch. */ }
   await importLaunchTracks();
 
-  const isGitHubPages = !USE_BOT_API;
-  if (!isGitHubPages) {
-    const res = await api("favorites/" + uid);
-    if (res && res.ok) {
-      const favs = await res.json();
-      libraryTracks = favs;
-      liked = new Set(favs.map(t => t.id));
-    }
-  }
+  await refreshLibrary();
 
   await select("wave");
   // Фоновая предзагрузка первых буферов аудио в Web Audio для мгновенного старта
@@ -1592,4 +1894,12 @@ window.addEventListener("hashchange", async () => {
   if (list === "favorites" || list === "wave") await select(list);
   else render();
 });
+function refreshActiveLists() {
+  if (!accessGranted || document.hidden) return;
+  refreshLibrary().catch(showError);
+  if (list === "top" && Date.now() - topLoadedAt > 60000) refreshTop().catch(showError);
+}
+window.addEventListener("focus", refreshActiveLists);
+document.addEventListener("visibilitychange", refreshActiveLists);
+setInterval(refreshActiveLists, 10000);
 init().catch(showError);

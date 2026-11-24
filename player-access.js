@@ -8,6 +8,7 @@ function endpoint(value) {
   try { const u=new URL(value); return u.protocol === "https:" && !u.username && !u.password && u.pathname === "/" ? u.origin : ""; }
   catch (_) { return ""; }
 }
+export const PLAYER_USER_ID = Number.isSafeInteger(claims?.sub) ? claims.sub : 0;
 export const API_BASE = endpoint(claims?.api);
 export async function checkPlayerAccess() {
   if (!token) return {allowed:false, reason:"telegram"};

@@ -10,6 +10,10 @@ export function mergeLibrary(existing, incoming) {
         typeof t.artist !== "string" || typeof t.title !== "string" || !t.title.trim()) continue;
     const previous = tracks.get(identity(t));
     const merged = {...previous, ...t};
+    const aliases = new Set([...(previous?.libraryIds || []), ...(t.libraryIds || [])]);
+    if (previous && previous.id !== t.id) aliases.add(previous.id);
+    aliases.delete(t.id);
+    if (aliases.size) merged.libraryIds = [...aliases];
     if (previous?.audio_url && !previous.is_preview && !t.audio_url) merged.audio_url = previous.audio_url;
     if (String(t.id).startsWith("bot-")) {
       if (previous?.is_preview && !t.audio_url) delete merged.audio_url;
