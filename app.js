@@ -1,13 +1,13 @@
-import {createAppearance} from "./appearance.js?v=29";
-import {API_BASE, PLAYER_USER_ID, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=29";
-import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=29";
-import {makeVisualizer} from "./visualizer.js?v=29";
-import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=29";
+import {createAppearance} from "./appearance.js?v=31";
+import {API_BASE, PLAYER_USER_ID, checkPlayerAccess, fetchPlayerAudio, playerHeaders} from "./player-access.js?v=31";
+import {appendWaveBatch, discoveryContext, waveProgress, WAVE_MIN_TRACKS, WAVE_BATCH_SIZE, buildPersonalizedBatch, recordWaveCompletion, replaceWaveTail, shuffleUpcoming as shuffleQueue} from "./wave-engine.js?v=31";
+import {makeVisualizer} from "./visualizer.js?v=31";
+import {mergeLibrary, decodeHandoff, createLibraryStore} from "./library-storage.js?v=31";
 
 const el = id => document.getElementById(id);
 const tg = window.Telegram?.WebApp;
 const uid = tg?.initDataUnsafe?.user?.id || PLAYER_USER_ID || 0;
-const USE_BOT_API = document.documentElement.dataset.botApi === "true";
+const USE_BOT_API = document.documentElement.dataset.botApi === "true" || Boolean(API_BASE);
 const audio = el("audio");
 const auraCanvas = el("aura-canvas");
 const auraWrapper = el("aura-wrapper");
@@ -556,13 +556,45 @@ let tracks = [], liked = new Set(), index = 0, list = "wave", revision = 0, obje
 let libraryTracks = [];
 let waveSession = {completed: 0, library: []};
 let lastCompletedWaveSession = -1;
+let waveInitialized = false;
 const libraryStore = createLibraryStore(tg?.CloudStorage, localStorage, uid);
 const savedTrack = t => t && libraryTracks.find(saved =>
   saved.artist.trim().toLowerCase() === t.artist.trim().toLowerCase() &&
   saved.title.trim().toLowerCase() === t.title.trim().toLowerCase());
 let repeatMode = "off"; // "off" | "all" | "one"
 let isShuffle = false;
-const recentPlayed = new Set();
+const recentKey = `pr1zrak_recent_${uid}`;
+const recentPlayed = new Set((() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(recentKey) || "[]");
+    return Array.isArray(saved) ? saved.slice(-200) : [];
+  } catch (_) { return []; }
+})());
+const listenedTracksKey = `pr1zrak_listened_tracks_${uid}`;
+const listenedTracks = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(listenedTracksKey) || "[]");
+    return Array.isArray(saved) ? saved.slice(-50) : [];
+  } catch (_) { return []; }
+})();
+function markRecentPlayed(trackOrId) {
+  const id = typeof trackOrId === "object" ? trackOrId?.id : trackOrId;
+  if (!id) return;
+  recentPlayed.delete(id);
+  recentPlayed.add(id);
+  while (recentPlayed.size > 200) {
+    recentPlayed.delete(recentPlayed.values().next().value);
+  }
+  try { localStorage.setItem(recentKey, JSON.stringify([...recentPlayed])); } catch (_) {}
+  if (typeof trackOrId === "object" && trackOrId?.artist && trackOrId?.title) {
+    const key = trackKey(trackOrId);
+    const existingIdx = listenedTracks.findIndex(item => trackKey(item) === key);
+    if (existingIdx >= 0) listenedTracks.splice(existingIdx, 1);
+    listenedTracks.push({artist: trackOrId.artist, title: trackOrId.title});
+    if (listenedTracks.length > 50) listenedTracks.splice(0, listenedTracks.length - 50);
+    try { localStorage.setItem(listenedTracksKey, JSON.stringify(listenedTracks)); } catch (_) {}
+  }
+}
 const knownWaveTracks = new Map([...SEED_CATALOG, ...SEARCH_RELEASES].map(t => [t.id, t]));
 function waveContext() {
   let history = [];
@@ -702,19 +734,7 @@ let pendingOrderWrite = Promise.resolve();
 let libraryRequest;
 let menuTrack;
 let removalKeys = [];
-let genre = "all";
-let topCatalog = [];
-let topIsLive = false;
-let topLoadedAt = 0;
 let activeDrag;
-
-const genrePatterns = {
-  breakcore: /breakcore|break core|sewerslvt|goreshit|machine girl|zxcursed|shadowraze|dead inside|1000[- ]7|рейз/i,
-  phonk: /phonk|drift|фонк|dvrst|lxst\s*cxntury|kordhell|interworld|moondeity|kaito shoma/i,
-  melancholy: /melanchol|меланхол|sadcore|slowcore|dead inside|fem[. ]love/i,
-  hyperpop: /hyperpop|hyper pop|гиперпоп|100 gecs|glaive|underscores|charli xcx|osquinn|ericdoa/i,
-  lofi: /lo[ -]?fi|ло[ -]?фай|jinsang|idealism|eevee|nujabes|chillhop|chilledcow/i,
-};
 
 function orderLibrary(items, order) {
   const ranks = new Map(order.map((key, i) => [key, i]));
@@ -736,12 +756,23 @@ function replaceQueue(items) {
 }
 
 function updateLibrary(items) {
+  const prevKeys = new Set(libraryTracks.map(trackKey));
+  const nextKeys = new Set(items.map(trackKey));
+  const membershipChanged = prevKeys.size !== nextKeys.size || [...nextKeys].some(k => !prevKeys.has(k));
   libraryTracks = items;
   liked = new Set(items.map(track => track.id));
   libraryStore.cache(items);
   if (list === "favorites") {
     replaceQueue([...items]);
     el("status").textContent = tracks.length ? "Личная библиотека" : "В библиотеке пока пусто.";
+  } else if (waveInitialized && list === "wave" && membershipChanged && waveProgress(items).unlocked) {
+    waveSession.library = [...items];
+    if (tracks.length) {
+      refill(true).catch(showError);
+    } else {
+      select("wave").catch(showError);
+      return;
+    }
   }
   render();
 }
@@ -844,48 +875,6 @@ el("delete-selected").onclick = () => confirmRemoval([...selectedTracks]);
 removeDialog.onclose = () => {
   if (removeDialog.returnValue === "delete") removeLibraryTracks(removalKeys).catch(showError);
 };
-
-function updateTopQueue() {
-  if (list !== "top") return;
-  const candidates = genre === "all" || genre === "weekly" ? topCatalog
-    : mergeLibrary([...SEED_CATALOG, ...SEARCH_RELEASES], topCatalog);
-  const items = candidates.filter(track => {
-    if (genre === "all") return true;
-    if (genre === "weekly") return track.weekly_plays > 0;
-    return genrePatterns[genre].test([track.artist, track.title, ...(track.aliases || [])].join(" "));
-  });
-  replaceQueue(items);
-  render();
-  el("status").textContent = !items.length ? "В этой категории треки появятся по мере прослушиваний"
-    : !topIsLive ? "Показана локальная подборка." : "Топ каталога за последние 7 дней";
-}
-
-async function refreshTop() {
-  const response = await api("top");
-  const result = response ? await response.json() : null;
-  if (list !== "top") return;
-  topIsLive = Boolean(result);
-  topCatalog = result || SEED_CATALOG;
-  topLoadedAt = Date.now();
-  updateTopQueue();
-}
-
-el("genre-tabs").addEventListener("wheel", event => {
-  if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-    event.preventDefault();
-    event.currentTarget.scrollBy({left: event.deltaY, behavior: "smooth"});
-  }
-}, {passive: false});
-
-for (const tab of document.querySelectorAll("[data-genre]")) {
-  tab.onclick = () => {
-    genre = tab.dataset.genre;
-    for (const button of document.querySelectorAll("[data-genre]")) {
-      button.setAttribute("aria-pressed", String(button === tab));
-    }
-    updateTopQueue();
-  };
-}
 
 function closeTrackMenu() {
   if (!trackMenu.hidden) {
@@ -994,8 +983,7 @@ function attachDrag(handle, row, track) {
 function render() {
   activeDrag?.();
   closeTrackMenu();
-  el("genre-tabs").hidden = list !== "top";
-  el("shuffle").disabled = list === "favorites" || list === "top";
+  el("shuffle").disabled = list === "favorites";
   updateSelection();
   const progress = waveProgress(libraryTracks);
   const locked = list === "wave" && !progress.unlocked;
@@ -1004,6 +992,7 @@ function render() {
   el("wave-progress-text").textContent = `Собрано ${progress.count}/${WAVE_MIN_TRACKS} треков для обучения Волны. Осталось ${progress.remaining}.`;
   el("queue").hidden = locked;
   el("list-title").hidden = locked;
+  if (el("wave-refresh")) el("wave-refresh").hidden = list !== "wave" || locked;
   const t = current();
   appearance.setCover(t?.cover_url || DEFAULT_COVER);
   el("like").disabled = !t;
@@ -1026,8 +1015,6 @@ function render() {
     emptyLi.style.cssText = "color: rgba(255,255,255,0.45); text-align: center; padding: 28px 16px; font-size: 13px; list-style: none; line-height: 1.6;";
     if (list === "favorites") {
       emptyLi.innerHTML = "В «Моих треках» пока пусто.<br>Отправьте себе трек через бота или сохраните его в плеере.";
-    } else if (list === "top") {
-      emptyLi.textContent = "В этой категории треки появятся по мере прослушиваний";
     } else {
       emptyLi.textContent = "Список воспроизведения пуст.";
     }
@@ -1099,24 +1086,80 @@ function render() {
   });
 }
 
+const WAVE_QUEUE_SIZE = WAVE_BATCH_SIZE || 20;
+
+function attachTrackAudio(track) {
+  if (!track) return track;
+  const audio_url = resolveTrackAudio(track);
+  return audio_url ? {...track, audio_url} : track;
+}
+
 function waveCatalog() {
-  return [...SEED_CATALOG, ...SEARCH_RELEASES, ...libraryTracks.map(t => ({...t, audio_url: resolveTrackAudio(t)}))];
+  return [...SEED_CATALOG, ...SEARCH_RELEASES, ...libraryTracks].map(attachTrackAudio);
+}
+
+async function fetchRemoteWave(limit = WAVE_QUEUE_SIZE, excludedTracks = [], softRecentIds = []) {
+  if (!USE_BOT_API) return [];
+  const mergedRecent = [...new Set([...recentPlayed, ...softRecentIds])];
+  const res = await api(`wave/${uid}?limit=${limit}`, {
+    method: "POST",
+    body: JSON.stringify({
+      limit,
+      library: libraryTracks.map(t => ({artist: t.artist, title: t.title})),
+      listened: listenedTracks.slice(-50),
+      recent: mergedRecent,
+      exclude: excludedTracks.map(t => t?.id).filter(Boolean),
+    }),
+  });
+  if (!res || !res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows.map(attachTrackAudio).filter(t => t && t.audio_url) : [];
 }
 
 async function refill(refreshTaste = false) {
-  if (list !== "wave" || (!refreshTaste && tracks.length - index > 1) || refilling) return;
+  if (list !== "wave" || (!refreshTaste && tracks.length - index > 5) || refilling) return;
   const r = revision;
   refilling = true;
   try {
-    const res = USE_BOT_API ? await api(`wave/${uid}?limit=5`) : null;
-    const remote = res ? await res.json() : [];
-    if (r !== revision) return;
     const protectedTracks = refreshTaste ? tracks.slice(index, index + 3) : tracks.slice(index);
-    const candidates = buildPersonalizedBatch([...waveCatalog(), ...remote], waveSession.library,
-      recentPlayed, protectedTracks, 5);
+    const remote = await fetchRemoteWave(WAVE_QUEUE_SIZE, protectedTracks);
+    if (r !== revision) return;
+    const candidates = buildPersonalizedBatch([...remote, ...waveCatalog()], waveSession.library,
+      recentPlayed, protectedTracks, WAVE_QUEUE_SIZE, Math.random, listenedTracks);
     if (refreshTaste) replaceWaveTail(tracks, index, candidates);
     else appendWaveBatch(tracks, index, candidates, recentPlayed);
     render();
+  } finally {
+    if (r === revision) refilling = false;
+  }
+}
+
+async function refreshWaveQueue() {
+  if (list !== "wave") return select("wave");
+  if (!waveProgress(libraryTracks).unlocked) return;
+  const isPlaying = document.body.classList.contains("playing");
+  if (!isPlaying || !tracks.length) {
+    const previousQueueIds = tracks.map(t => t?.id).filter(Boolean);
+    await select("wave", previousQueueIds);
+    showToast("Волна обновлена под ваш вкус");
+    return;
+  }
+  const cur = current();
+  if (cur?.id) markRecentPlayed(cur);
+  const r = revision;
+  if (refilling) return;
+  refilling = true;
+  try {
+    const protectedTracks = cur ? [cur] : [];
+    const previousTailIds = tracks.slice(index + 1).map(t => t?.id).filter(Boolean);
+    const remote = await fetchRemoteWave(WAVE_QUEUE_SIZE, protectedTracks, previousTailIds);
+    if (r !== revision || list !== "wave") return;
+    const softRecent = new Set([...recentPlayed, ...previousTailIds]);
+    const candidates = buildPersonalizedBatch([...remote, ...waveCatalog()], libraryTracks,
+      softRecent, protectedTracks, WAVE_QUEUE_SIZE, Math.random, listenedTracks);
+    replaceWaveTail(tracks, index, candidates, 0);
+    render();
+    showToast("Волна обновлена под ваш вкус");
   } finally {
     if (r === revision) refilling = false;
   }
@@ -1183,10 +1226,7 @@ async function play(i) {
     if (sessionId !== currentSessionId) return;
     if (objectURL) URL.revokeObjectURL(objectURL);
     streamSrc = objectURL = URL.createObjectURL(blob);
-  }
-  const isGitHubPages = !USE_BOT_API;
-
-  if (!isGitHubPages) {
+  } else if (!streamSrc && USE_BOT_API && selected?.id) {
     try {
       const res = await api("audio/" + selected.id);
       if (sessionId !== currentSessionId) return; // ПРЕРЫВАЕМ если сессия сменилась
@@ -1265,12 +1305,7 @@ async function play(i) {
 
   // Анти-повтор: фиксация недавних треков
   if (selected && selected.id) {
-    recentPlayed.delete(selected.id);
-    recentPlayed.add(selected.id);
-    if (recentPlayed.size > 1000) {
-      const oldest = recentPlayed.values().next().value;
-      recentPlayed.delete(oldest);
-    }
+    markRecentPlayed(selected);
   }
 
   // Запись в историю прослушиваний для персонализации Волны
@@ -1285,7 +1320,7 @@ async function play(i) {
   } catch (_) {}
   waveContext();
 
-  const listenedId = catalogId(selected) || (USE_BOT_API ? selected.id : null);
+  const listenedId = catalogId(selected);
   if (listenedId) api("listen", {method: "POST", body: JSON.stringify({id: listenedId})});
   refill().catch(() => {});
 }
@@ -1383,7 +1418,7 @@ function togglePlayPause() {
 el("play").onclick = togglePlayPause;
 auraWrapper?.addEventListener("click", togglePlayPause);
 
-async function select(name) {
+async function select(name, softRecentIds = []) {
   const r = ++revision;
   const sessionId = ++currentSessionId;
   stopCurrentAudio(false);
@@ -1410,14 +1445,9 @@ async function select(name) {
 
   const lt = el("list-title");
   if (lt) {
-    lt.textContent = name === "favorites" ? "Мои треки" : name === "top" ? "Топ хитов" : "Моя Волна";
+    lt.textContent = name === "favorites" ? "Мои треки" : "Моя Волна";
   }
 
-  if (name === "top") {
-    if (topLoadedAt) updateTopQueue();
-    if (Date.now() - topLoadedAt > 60000) await refreshTop();
-    return;
-  }
   if (name === "favorites") {
     replaceQueue([...libraryTracks]);
     render();
@@ -1431,19 +1461,13 @@ async function select(name) {
     return;
   }
 
-  let result = null;
-  const isGitHubPages = !USE_BOT_API;
-
-  if (!isGitHubPages) {
-    const res = await api(name === "top" ? "top" : `${name}/${uid}`);
-    if (res && res.ok) {
-      result = await res.json();
-    }
-  }
+  const remote = name === "wave" ? await fetchRemoteWave(WAVE_QUEUE_SIZE, [], softRecentIds) : [];
 
   if (r !== revision || sessionId !== currentSessionId) return;
 
-  if (!result?.length) result = buildPersonalizedBatch(waveCatalog(), waveSession.library, recentPlayed, [], 5);
+  const effectiveRecent = softRecentIds.length ? new Set([...recentPlayed, ...softRecentIds]) : recentPlayed;
+  const result = buildPersonalizedBatch([...remote, ...waveCatalog()], waveSession.library,
+    effectiveRecent, [], WAVE_QUEUE_SIZE, Math.random, listenedTracks);
 
   if (r !== revision || sessionId !== currentSessionId) return;
   tracks = result;
@@ -1464,8 +1488,16 @@ async function select(name) {
   if (firstUrl) loadAudioBuffer(firstUrl).catch(() => {});
 }
 
+el("wave-refresh")?.addEventListener("click", () => refreshWaveQueue().catch(showError));
+
 for (const b of document.querySelectorAll("[data-list]")) {
-  b.onclick = () => select(b.dataset.list).catch(showError);
+  b.onclick = () => {
+    if (b.dataset.list === "wave" && list === "wave") {
+      refreshWaveQueue().catch(showError);
+    } else {
+      select(b.dataset.list).catch(showError);
+    }
+  };
 }
 
 el("next").onclick = () => {
@@ -1895,6 +1927,7 @@ async function init() {
 
   await refreshLibrary();
 
+  waveInitialized = true;
   await select("wave");
   // Фоновая предзагрузка первых буферов аудио в Web Audio для мгновенного старта
   SEED_CATALOG.slice(0, 4).forEach(t => loadAudioBuffer(t.audio_url).catch(() => {}));
@@ -1908,7 +1941,6 @@ window.addEventListener("hashchange", async () => {
 function refreshActiveLists() {
   if (!accessGranted || document.hidden) return;
   refreshLibrary().catch(showError);
-  if (list === "top" && Date.now() - topLoadedAt > 60000) refreshTop().catch(showError);
 }
 window.addEventListener("focus", refreshActiveLists);
 document.addEventListener("visibilitychange", refreshActiveLists);

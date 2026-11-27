@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <meta name="player-api" content="">
   <title>ПРИЗРАК — Музыкальный плеер</title>
-  <link rel="stylesheet" href="./style.css?v=29">
+  <link rel="stylesheet" href="./style.css?v=31">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body class="access-locked">
@@ -19,7 +19,6 @@
     <nav aria-label="Плейлисты">
       <button data-list="wave" aria-pressed="true">Волна</button>
       <button data-list="favorites">Мои треки</button>
-      <button data-list="top">Топ</button>
       <button data-list="search" id="tab-search" style="display:none">Поиск</button>
     </nav>
 
@@ -129,15 +128,9 @@
     <progress id="wave-progress" max="15" value="0" aria-label="Треки для обучения Волны"></progress>
     <p>Добавляйте треки через поиск или бота.</p>
   </section>
-  <h2 id="list-title">Очередь воспроизведения</h2>
-  <div class="genre-tabs" id="genre-tabs" role="group" aria-label="Фильтры Топа" hidden>
-    <button data-genre="all" aria-pressed="true">Все</button>
-    <button data-genre="breakcore" aria-pressed="false">Breakcore</button>
-    <button data-genre="phonk" aria-pressed="false">Phonk / Drift</button>
-    <button data-genre="melancholy" aria-pressed="false">Melancholy</button>
-    <button data-genre="hyperpop" aria-pressed="false">Hyperpop</button>
-    <button data-genre="lofi" aria-pressed="false">Lo-Fi</button>
-    <button data-genre="weekly" aria-pressed="false">Тренды недели</button>
+  <div class="list-header">
+    <h2 id="list-title">Очередь воспроизведения</h2>
+    <button id="wave-refresh" type="button" hidden title="Обновить подборку Волны">↻ Обновить</button>
   </div>
   <div id="library-tools" hidden><button id="select-tracks" aria-pressed="false">Выбрать</button></div>
   <ol id="queue"></ol>
@@ -203,6 +196,6 @@
     <a class="access-return" href="https://t.me/PR1ZRAKWORK_BOT">Вернуться в бот</a>
   </div>
 </section>
-<script type="module" src="./app.js?v=29"></script>
+<script type="module" src="./app.js?v=31"></script>
 </body>
 </html>
